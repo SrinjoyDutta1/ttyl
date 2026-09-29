@@ -17,7 +17,11 @@ enum Palette {
         case "claude": return Color(red: 0.85, green: 0.47, blue: 0.34)
         case "codex": return Color(red: 0.06, green: 0.64, blue: 0.50)
         case "gemini": return Color(red: 0.30, green: 0.55, blue: 0.96)
-        case "qwen": return Color(red: 0.55, green: 0.36, blue: 0.96)
+        case "qwen": return Color(red: 0.39, green: 0.40, blue: 0.95)
+        case "copilot": return Color(red: 0.64, green: 0.44, blue: 0.97)
+        case "opencode": return Color(red: 0.90, green: 0.65, blue: 0.04)
+        case "goose": return Color(red: 0.96, green: 0.25, blue: 0.37)
+        case "aider": return Color(red: 0.08, green: 0.72, blue: 0.65)
         default: return .secondary
         }
     }

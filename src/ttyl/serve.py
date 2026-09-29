@@ -31,6 +31,7 @@ from datetime import datetime, timedelta, timezone
 from . import collide, render, terminal
 from .model import Session, Status, one_line, plain
 from .ring import Ringer, _play, alert_sound, claim_noise, ring_event, state_dir
+from .store import Store
 from .summarize import Summarizer, enabled_by_env, load_key_from_shell
 
 TURNS = 14
@@ -88,7 +89,7 @@ def session_json(s: Session, number: int | None) -> dict:
         "archived": s.archived,
         "collisions": [{"path": s.rel(path), "with": [collide.describe(s, o) for o in others]}
                        for path, others in s.collisions],
-        "deletable": s.status == Status.CLOSED and not (s.agent == "codex" and s.entrypoint == "desktop"),
+        "deletable": s.status == Status.CLOSED and Store.can_trash(s),
     }
 
 

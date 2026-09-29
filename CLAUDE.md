@@ -13,6 +13,10 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
   at a time (`PARSERS` in store.py). Gemini re-appends whole messages (last copy of an id wins) and
   has `$set` / `$rewindTo` records, so `GeminiParser` rebuilds turns in `flush()` after each batch.
   Gemini/Qwen were built from their source (clones were in the scratchpad), not real sessions.
+- `copilot.py` (JSONL, `PARSERS`), `opencode.py` + `goose.py` (SQLite, read-only, reloaded when the db or
+  its -wal changes: `Store._database_sessions`), `aider.py` (per-repo markdown, latest run per repo,
+  found via known folders + running aider: `Store._aider_sessions`). Terminal agents without a registry
+  get live status from their process's cwd (`Store._cli_live`, `procs.is_agent_cli`).
 - `store.py`: finds transcripts, tails them by byte offset, joins live state (registry, `ps`) and git commits.
 - `render.py`: Rich renderables shared by the CLI and the TUI (sections, lanes, recap, timeline).
 - `tui.py`: the Textual app. `cli.py`: entry point. `demo.py`: made-up sessions.

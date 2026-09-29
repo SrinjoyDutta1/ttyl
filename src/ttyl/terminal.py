@@ -141,6 +141,14 @@ def resume_command(s: Session) -> str:
         return f"{cd}codex resume {s.id}"
     if s.agent in ("gemini", "qwen"):  # both only look in the current directory's project
         return f"{cd}{s.agent} --resume {s.id}"
+    if s.agent == "copilot":
+        return f"{cd}copilot --resume={s.id}"
+    if s.agent == "opencode":
+        return f"{cd}opencode --session {s.id}"
+    if s.agent == "goose":
+        return f"{cd}goose session --resume --session-id {s.id}"
+    if s.agent == "aider":  # no session ids: it reloads this repo's chat history
+        return f"{cd}aider --restore-chat-history"
     flags = "".join(" " + shlex.quote(a) for a in s.launch_args)
     return f"{cd}claude --resume {s.id}{flags}"
 

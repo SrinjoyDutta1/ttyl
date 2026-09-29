@@ -166,7 +166,8 @@ def where(s: Session) -> str:
     return ""
 
 
-AGENT_STYLE = {"claude": "#d97757", "codex": "#10a37f", "gemini": "#4c8bf5", "qwen": "#8b5cf6"}
+AGENT_STYLE = {"claude": "#d97757", "codex": "#10a37f", "gemini": "#4c8bf5", "qwen": "#6366f1",
+               "copilot": "#a371f7", "opencode": "#e5a50a", "goose": "#f43f5e", "aider": "#14b8a6"}
 
 
 def agent_tag(s: Session) -> Text:

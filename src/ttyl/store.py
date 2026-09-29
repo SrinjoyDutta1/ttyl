@@ -24,10 +24,15 @@ from . import collide
 from . import procs as proclib
 from .claude import ClaudeParser
 from .codex import CodexParser, load_threads, load_titles
+from . import aider, goose, opencode
+from .copilot import CopilotParser, read_workspace
 from .gemini import GeminiParser
 from .qwen import QwenParser
 
-PARSERS = {"claude": ClaudeParser, "codex": CodexParser, "gemini": GeminiParser, "qwen": QwenParser}
+PARSERS = {"claude": ClaudeParser, "codex": CodexParser, "gemini": GeminiParser, "qwen": QwenParser,
+           "copilot": CopilotParser}
+TERMINAL_AGENTS = ("gemini", "qwen", "copilot", "opencode", "goose", "aider")  # live via their process
+TRASHABLE = ("claude", "codex", "gemini", "qwen", "copilot")  # one file (or folder) per session
 from .model import STATUS_RANK, Commit, Session, Status
 from .state import State
 
@@ -43,6 +48,9 @@ class Paths:
     codex_home: Path = HOME / ".codex"
     gemini_home: Path = HOME / ".gemini"
     qwen_home: Path = HOME / ".qwen"
+    copilot_home: Path = HOME / ".copilot"
+    opencode_data: Path = HOME / ".local" / "share" / "opencode"
+    goose_data: Path = HOME / ".local" / "share" / "goose"
 
 
 APPROVAL_GUESS = timedelta(seconds=20)  # a Codex tool call pending this long is probably waiting on you
@@ -70,7 +78,7 @@ class _Tail:
 
     def _reset(self) -> None:
         self.session = Session(agent=self.agent, id=self.path.stem, path=self.path, cwd=self.cwd,
-                               entrypoint="cli" if self.agent in ("gemini", "qwen") else "")
+                               entrypoint="cli" if self.agent in TERMINAL_AGENTS else "")
         self.parser = PARSERS[self.agent](self.session)
         self.offset, self.stamp = 0, None
 
@@ -155,6 +163,8 @@ class Store:
         self._codex_cwds: dict[int, str | None] = {}  # pid -> cwd, lsof is slow
         self._git = _GitCache()
         self.collisions: list[collide.Collision] = []
+        self._db_cache: dict[Path, tuple[tuple, list[Session]]] = {}  # SQLite-backed agents
+        self._aider_cache: dict[Path, tuple[tuple, Session | None]] = {}
 
     # -- public -------------------------------------------------------------
 
@@ -183,6 +193,9 @@ class Store:
         for path in self.paths.qwen_home.glob("projects/*/chats/*.jsonl"):
             if self.show_all or str(path) in remembered_paths or _mtime(path) >= cutoff:
                 wanted.append((path, "qwen"))
+        for path in self.paths.copilot_home.glob("session-state/*/events.jsonl"):
+            if self.show_all or str(path) in remembered_paths or _mtime(path) >= cutoff:
+                wanted.append((path, "copilot"))
 
         sessions: list[Session] = []
         for path, agent, *cwd in wanted:
@@ -192,7 +205,13 @@ class Store:
             tail.pump()
             if tail.session.imported:
                 continue
+            if agent == "copilot":  # its name can change after the session starts
+                ws = read_workspace(path.parent / "workspace.yaml")
+                tail.session.ai_title = ws.get("name") or tail.session.ai_title
+                tail.session.branch = ws.get("branch") or tail.session.branch
             sessions.append(tail.session)
+        sessions += self._database_sessions(cutoff)
+        sessions += self._aider_sessions(procs, sessions, cutoff)
 
         by_id = {s.id: s for s in sessions}
         for sid, lv in live.items():
@@ -223,7 +242,7 @@ class Store:
                 s.approval_mode = s.approval_mode or info["approval_mode"]
                 s.archived = info["archived"]
         self._codex_live(procs, [s for s in sessions if s.agent == "codex"])
-        for agent in ("gemini", "qwen"):
+        for agent in TERMINAL_AGENTS:
             self._cli_live(procs, [s for s in sessions if s.agent == agent], agent)
         for s in sessions:
             self._attach_commits(s)
@@ -275,18 +294,27 @@ class Store:
         s.archived = on
         return f"archived {s.title!r}" if on else f"unarchived {s.title!r}"
 
+    @staticmethod
+    def can_trash(s: Session) -> bool:
+        return s.agent in TRASHABLE and not (s.agent == "codex" and s.entrypoint == "desktop")
+
     def trash(self, s: Session) -> tuple[bool, str]:
         """Move a closed session's transcript to the Trash, with a note saying where it came from."""
         if s.status != Status.CLOSED:
             return False, "it's still open in a terminal; close it first (or archive it)"
-        if s.agent == "codex" and s.entrypoint == "desktop":
-            return False, "Codex keeps its own index of Desktop threads; archive it here, or delete it in Codex"
+        if not self.can_trash(s):
+            if s.agent == "codex":
+                return False, "Codex keeps its own index of Desktop threads; archive it here, or delete it in Codex"
+            return False, f"{s.agent} keeps sessions in its own database or log; archive it here instead"
         if not s.path or not s.path.exists():
             return False, "its transcript is already gone"
-        files = [s.path]
-        extra = s.path.with_suffix("")  # Claude keeps subagent logs and big tool results next to it
-        if extra.is_dir():
-            files.append(extra)
+        if s.agent == "copilot":
+            files = [s.path.parent]  # the whole session-state/<id> folder
+        else:
+            files = [s.path]
+            extra = s.path.with_suffix("")  # Claude keeps subagent logs and big tool results next to it
+            if extra.is_dir():
+                files.append(extra)
         trash = Path.home() / ".Trash" if sys.platform == "darwin" else Path.home() / ".local/share/Trash/files"
         stamp = datetime.now().strftime("%Y-%m-%d %H.%M.%S")
         name = "".join(c if c.isalnum() or c in " -_" else " " for c in s.title)[:50].strip() or s.id[:8]
@@ -417,6 +445,51 @@ class Store:
             else:
                 self._set_closed(s)
 
+    def _database_sessions(self, cutoff: float) -> list[Session]:
+        """OpenCode and Goose keep sessions in SQLite; reread a database only when it changes."""
+        out: list[Session] = []
+        since = 0.0 if self.show_all else cutoff
+        sources = [(db, lambda db: opencode.load(db, int(since * 1000))) for db in
+                   sorted(self.paths.opencode_data.glob("opencode*.db"))]
+        goose_db = self.paths.goose_data / "sessions" / "sessions.db"
+        if goose_db.exists():
+            stamp_since = datetime.fromtimestamp(since, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            sources.append((goose_db, lambda db: goose.load(db, stamp_since)))
+        for db, loader in sources:
+            stamp = (_mtime(db), _mtime(Path(str(db) + "-wal")), self.show_all)
+            cached = self._db_cache.get(db)
+            if cached is None or cached[0] != stamp:
+                cached = self._db_cache[db] = (stamp, loader(db))
+            out += cached[1]
+        return out
+
+    def _aider_sessions(self, procs: dict[int, proclib.Proc], sessions: list[Session], cutoff: float) -> list[Session]:
+        """Aider logs into each repo; look in every folder we know about and where aider is running."""
+        dirs = {s.cwd for s in sessions if s.cwd}
+        for p in procs.values():
+            if proclib.is_agent_cli(p, "aider"):
+                if p.pid not in self._codex_cwds:
+                    self._codex_cwds[p.pid] = proclib.cwd_of(p.pid)
+                if self._codex_cwds[p.pid]:
+                    dirs.add(self._codex_cwds[p.pid])
+        out = []
+        for d in dirs:
+            path = Path(d) / aider.HISTORY
+            m = _mtime(path)
+            if m < 0 or (m < cutoff and not self.show_all):
+                continue
+            stamp = (m, path.stat().st_size)
+            cached = self._aider_cache.get(path)
+            if cached is None or cached[0] != stamp:
+                try:
+                    session = aider.parse(path, path.read_text(errors="replace"), m)
+                except OSError:
+                    session = None
+                cached = self._aider_cache[path] = (stamp, session)
+            if cached[1] is not None:
+                out.append(cached[1])
+        return out
+
     def _gemini_files(self) -> list[tuple[Path, str]]:
         """(session file, project dir) for every Gemini CLI project; the dir comes from .project_root."""
         tmp = self.paths.gemini_home / "tmp"
@@ -460,6 +533,8 @@ class Store:
     # -- commits --------------------------------------------------------------
 
     def _attach_commits(self, s: Session) -> None:
+        if s.agent == "aider":
+            return  # Aider logs its own commits
         turns = s.visible_turns
         committing = [i for i, t in enumerate(turns) if t.committed]
         for t in turns:
