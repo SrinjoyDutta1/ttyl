@@ -57,6 +57,8 @@ class TtylApp(App):
         *[Binding(str(n), f"go({n})", show=False) for n in range(2, 10)],
         Binding("o", "reopen", "reopen", show=False),
         Binding("a", "toggle_all", "show all"),
+        Binding("x", "archive", "archive"),
+        Binding("D", "delete", "delete", show=False),
         Binding("r", "refresh", "refresh", show=False),
         Binding("q", "quit", "quit"),
     ]
@@ -74,6 +76,7 @@ class TtylApp(App):
         self.summarizer = summarizer
         self._summarizing = False
         self._reopened: dict[str, float] = {}  # session id -> when we asked the terminal to reopen it
+        self._delete_armed: tuple[str, float] | None = None  # first D press: (session, when)
         self.sessions: list[Session] = []
         self.order: list[Session] = []  # display order; index + 1 is the lane's number
         self.selected: str | None = None
@@ -267,6 +270,12 @@ class TtylApp(App):
         if s is None:
             return
         self._stop_ringing(s)
+        if s.agent == "codex" and s.entrypoint == "desktop":
+            if getattr(self.store, "demo", False):
+                self.notify(terminal.codex_link(s), title="demo: would open in Codex")
+            elif not terminal.open_in_codex(s):
+                self.notify("couldn't open the Codex app", title=s.project, severity="error")
+            return
         if s.status == Status.CLOSED:
             self.action_reopen()
             return
@@ -305,6 +314,34 @@ class TtylApp(App):
         ok = terminal.reopen(s)
         self.call_from_thread(self.notify, terminal.resume_command(s), title="reopened" if ok else "couldn't open a terminal",
                               severity="information" if ok else "error")
+
+    def action_archive(self) -> None:
+        s = self._current()
+        if s is None:
+            return
+        if getattr(self.store, "demo", False):
+            self.notify(f"demo: would {'unarchive' if s.archived else 'archive'} {s.title!r}")
+            return
+        self.notify(self.store.archive(s, not s.archived), title=s.project)
+        self.action_refresh()
+
+    def action_delete(self) -> None:
+        """D twice: move a closed session's transcript to the Trash."""
+        s = self._current()
+        if s is None:
+            return
+        armed = self._delete_armed
+        self._delete_armed = (s.id, time.monotonic())
+        if not armed or armed[0] != s.id or time.monotonic() - armed[1] > 4:
+            self.notify(f"press D again to move {s.title!r} to the Trash", title="delete?", severity="warning")
+            return
+        self._delete_armed = None
+        if getattr(self.store, "demo", False):
+            self.notify(f"demo: would move {s.title!r} to the Trash")
+            return
+        ok, msg = self.store.trash(s)
+        self.notify(msg, title=s.project, severity="information" if ok else "error")
+        self.action_refresh()
 
     def action_toggle_all(self) -> None:
         self.store.show_all = not self.store.show_all

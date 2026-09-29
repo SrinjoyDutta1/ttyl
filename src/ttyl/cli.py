@@ -7,6 +7,8 @@
   ttyl jump <which>    focus the terminal tab that session runs in
   ttyl resume <which>  reopen a closed session in a new terminal window
   ttyl summarize [which]  write (or refresh) AI summaries now
+  ttyl archive <which>   hide a session (new activity brings it back); unarchive undoes
+  ttyl delete <which>    move a closed session's transcript to the Trash
   ttyl serve          JSON engine for the menu bar app (see gui/)
   ttyl --demo          try it on made-up sessions
 
@@ -54,6 +56,13 @@ def main(argv: list[str] | None = None) -> int:
     jump.add_argument("which")
     resume = sub.add_parser("resume", parents=[common], help="reopen a closed session in a new window")
     resume.add_argument("which")
+    for name, help_ in (("archive", "hide a session from the map until it does something new"),
+                        ("unarchive", "show an archived session again"),
+                        ("delete", "move a closed session's transcript to the Trash")):
+        cmd = sub.add_parser(name, parents=[common], help=help_)
+        cmd.add_argument("which")
+        if name == "delete":
+            cmd.add_argument("-y", "--yes", action="store_true", help="don't ask")
     summ = sub.add_parser("summarize", parents=[common], help="write AI summaries now (one session, or all that need one)")
     summ.add_argument("which", nargs="?")
     app = sub.add_parser("app", help="open the macOS menu bar app (builds and installs it the first time)")
@@ -95,9 +104,10 @@ def main(argv: list[str] | None = None) -> int:
         console.print(render.LEGEND)
         return 0
 
+    store = None
     s = find(sessions, args.which)
     if s is None and not args.demo:
-        # maybe it's older than the window
+        # maybe it's older than the window, or archived
         store = _store(args)
         store.show_all = True
         s = find(store.refresh(), args.which)
@@ -107,6 +117,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "show":
         console.print(render.show(s, width=console.width, limit=args.n))
+        return 0
+    if args.cmd in ("archive", "unarchive", "delete"):
+        if args.demo:
+            console.print(f"demo: would {args.cmd} {s.title!r}")
+            return 0
+        store = store or _store(args)
+        if store is not None and not any(x.id == s.id for x in store.refresh()):
+            store.show_all = True
+            store.refresh()
+        if args.cmd == "delete":
+            if not args.yes and input(f"Move {s.title!r} to the Trash? [y/N] ").strip().lower() != "y":
+                return 1
+            ok, msg = store.trash(s)
+            console.print(msg if ok else f"[red]couldn't delete:[/] {msg}")
+            return 0 if ok else 1
+        console.print(store.archive(s, args.cmd == "archive"))
         return 0
     if args.demo and args.cmd in ("jump", "resume"):
         console.print(f"demo: would {'focus ' + s.tty if args.cmd == 'jump' and s.tty else 'run: ' + terminal.resume_command(s)}")

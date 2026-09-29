@@ -80,3 +80,52 @@ def test_state_survives_a_corrupt_file(tmp_path):
     assert st.sessions == {}
     st.set_summary("a", "ok", 1, "m")
     assert json.loads(bad.read_text())["sessions"]["a"]["summary"]["text"] == "ok"
+
+
+def test_archive_hides_until_new_activity(home):
+    paths, _, state_file = home
+    path = paths.claude_projects / "-w" / "aaa.jsonl"
+    b = Claude().prompt("x").say("y")
+    b.write(path)
+    store = Store(paths, days=10_000, state=State(state_file))
+    (s,) = store.refresh()
+    store.archive(s)
+    assert store.refresh() == []
+    store.show_all = True
+    (s,) = store.refresh()
+    assert s.archived
+    store.show_all = False
+
+    import json as _json
+    from datetime import datetime, timezone
+    with open(path, "a") as fh:  # the session does something new: it comes back
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        fh.write(_json.dumps({"type": "user", "timestamp": now, "message": {"role": "user", "content": "more"}}) + "\n")
+    (s,) = store.refresh()
+    assert not s.archived and s.last_turn.prompt == "more"
+
+
+def test_delete_moves_the_transcript_to_the_trash(home, tmp_path, monkeypatch):
+    paths, procs, state_file = home
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    path = Claude().prompt("tidy up").say("ok").write(paths.claude_projects / "-w" / "gone.jsonl")
+    (path.with_suffix("") / "subagents").mkdir(parents=True)
+    (path.with_suffix("") / "subagents" / "agent-1.jsonl").write_text("{}\n")
+    Claude().prompt("still open").say("ok").write(paths.claude_projects / "-w" / "live.jsonl")
+    procs[500] = proclib.Proc(500, 1, "ttys001", "claude")
+    (paths.claude_registry / "500.json").write_text(json.dumps({"pid": 500, "sessionId": "live", "status": "idle"}))
+
+    store = Store(paths, days=10_000, state=State(state_file))
+    by_id = {s.id: s for s in store.refresh()}
+    ok, msg = store.trash(by_id["live"])
+    assert not ok and "still open" in msg
+
+    ok, msg = store.trash(by_id["gone"])
+    assert ok, msg
+    assert not path.exists() and not path.with_suffix("").exists()
+    import sys as _sys
+    trash = tmp_path / "home" / (".Trash" if _sys.platform == "darwin" else ".local/share/Trash/files")
+    (folder,) = trash.iterdir()
+    assert (folder / "gone.jsonl").exists() and (folder / "gone" / "subagents" / "agent-1.jsonl").exists()
+    assert "move these back" in (folder / "WHERE THIS CAME FROM.txt").read_text()
+    assert [s.id for s in store.refresh()] == ["live"]

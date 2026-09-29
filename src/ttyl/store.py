@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -20,7 +22,7 @@ from pathlib import Path
 
 from . import procs as proclib
 from .claude import ClaudeParser
-from .codex import CodexParser, load_titles
+from .codex import CodexParser, load_threads, load_titles
 from .model import STATUS_RANK, Commit, Session, Status
 from .state import State
 
@@ -33,6 +35,10 @@ class Paths:
     claude_registry: Path = HOME / ".claude" / "sessions"
     codex_sessions: Path = HOME / ".codex" / "sessions"
     codex_index: Path = HOME / ".codex" / "session_index.jsonl"
+    codex_home: Path = HOME / ".codex"
+
+
+APPROVAL_GUESS = timedelta(seconds=20)  # a Codex tool call pending this long is probably waiting on you
 
 
 @dataclass
@@ -125,6 +131,7 @@ class Store:
         self.show_all = False
         self._tails: dict[Path, _Tail] = {}
         self._codex_titles: tuple[float, dict[str, str]] = (-1.0, {})
+        self._codex_threads: tuple[float, dict[str, dict]] = (-1.0, {})
         self._codex_cwds: dict[int, str | None] = {}  # pid -> cwd, lsof is slow
         self._git = _GitCache()
 
@@ -175,15 +182,26 @@ class Store:
             if s.agent == "claude" and s.id not in live:
                 self._set_closed(s)
 
-        self._codex_live(procs, [s for s in sessions if s.agent == "codex"])
         titles = self._codex_thread_names()
+        threads = self._codex_thread_index()
         for s in sessions:
-            if s.agent == "codex" and s.id in titles:
+            if s.agent != "codex":
+                continue
+            if s.id in titles:
                 s.ai_title = titles[s.id]
+            info = threads.get(s.id)
+            if info:
+                s.ai_title = info["title"] or s.ai_title
+                s.branch = info["branch"] or s.branch
+                s.approval_mode = s.approval_mode or info["approval_mode"]
+                s.archived = info["archived"]
+        self._codex_live(procs, [s for s in sessions if s.agent == "codex"])
+        for s in sessions:
             self._attach_commits(s)
         self._remember(sessions, procs, now)
 
-        keep = [s for s in sessions if s.status != Status.CLOSED or s.visible_turns]
+        keep = [s for s in sessions if (s.status != Status.CLOSED or s.visible_turns)
+                and (self.show_all or not s.archived)]
         keep.sort(key=_sort_key)
         return keep
 
@@ -201,11 +219,60 @@ class Store:
             if s.status == Status.CLOSED and rec.get("last_live"):
                 s.closed_at = datetime.fromtimestamp(rec["last_live"], tz=timezone.utc)
                 s.launch_args = list(rec.get("args") or [])
+            archived_at = rec.get("archived_at")
+            if archived_at:
+                active = s.last_active.timestamp() if s.last_active else 0
+                if s.status in (Status.BUSY, Status.WAITING) or active > archived_at:
+                    self.state.set_archived(s.id, False)  # it came back to life: show it again
+                    s.archived = False
+                else:
+                    s.archived = True
+            elif s.agent == "claude":
+                s.archived = False  # (Codex threads keep the flag from Codex's own index)
             summary = rec.get("summary") or {}
             if summary.get("text") and summary.get("turns", 0) >= s.summary_turns:
                 s.summary, s.summary_turns = summary["text"], summary.get("turns", 0)
                 s.summary_at = datetime.fromtimestamp(summary.get("at", now), tz=timezone.utc)
         self.state.save()
+
+    # -- archive / delete -----------------------------------------------------
+
+    def archive(self, s: Session, on: bool = True) -> str:
+        """Hide a session from the map (nothing on disk is touched). New activity brings it back."""
+        if self.state is None:
+            return "archiving needs saved state"
+        self.state.set_archived(s.id, on)
+        s.archived = on
+        return f"archived {s.title!r}" if on else f"unarchived {s.title!r}"
+
+    def trash(self, s: Session) -> tuple[bool, str]:
+        """Move a closed session's transcript to the Trash, with a note saying where it came from."""
+        if s.status != Status.CLOSED:
+            return False, "it's still open in a terminal; close it first (or archive it)"
+        if s.agent == "codex" and s.entrypoint == "desktop":
+            return False, "Codex keeps its own index of Desktop threads; archive it here, or delete it in Codex"
+        if not s.path or not s.path.exists():
+            return False, "its transcript is already gone"
+        files = [s.path]
+        extra = s.path.with_suffix("")  # Claude keeps subagent logs and big tool results next to it
+        if extra.is_dir():
+            files.append(extra)
+        trash = Path.home() / ".Trash" if sys.platform == "darwin" else Path.home() / ".local/share/Trash/files"
+        stamp = datetime.now().strftime("%Y-%m-%d %H.%M.%S")
+        name = "".join(c if c.isalnum() or c in " -_" else " " for c in s.title)[:50].strip() or s.id[:8]
+        dest = trash / f"ttyl · {name} · {stamp}"
+        try:
+            dest.mkdir(parents=True)
+            for f in files:
+                shutil.move(str(f), str(dest / f.name))
+            (dest / "WHERE THIS CAME FROM.txt").write_text(
+                f"Deleted from ttyl: {s.title}\n\nTo restore, move these back to:\n{s.path.parent}\n")
+        except OSError as e:
+            return False, f"couldn't move it to the Trash: {e}"
+        self._tails.pop(s.path, None)
+        if self.state is not None:
+            self.state.forget(s.id)
+        return True, f"moved {s.title!r} to the Trash"
 
     # -- live state -----------------------------------------------------------
 
@@ -264,22 +331,42 @@ class Store:
             if self._codex_cwds[p.pid]:
                 by_cwd[self._codex_cwds[p.pid]] = p
 
+        # the Desktop app runs `codex ... app-server`; while it's up, its threads are open in it
+        app_running = any("app-server" in p.command and "codex" in p.command for p in procs.values())
         now = datetime.now(timezone.utc)
         claimed: set[int] = set()
         for s in sorted(sessions, key=lambda s: s.updated or now, reverse=True):
             fresh = s.updated is not None and now - s.updated < timedelta(minutes=10)
             working = bool(s.last_turn and not s.last_turn.done and fresh)
             proc = by_cwd.get(s.cwd) if s.entrypoint == "cli" else None
+            s.waiting_for = ""
             if proc and proc.pid not in claimed:  # newest session in that dir owns the process
                 claimed.add(proc.pid)
                 s.pid, s.tty = proc.pid, proc.tty
                 s.status = Status.BUSY if working else Status.IDLE
+            elif s.entrypoint == "desktop" and app_running:
+                s.status = Status.BUSY if working else Status.IDLE
             elif working:
-                s.status = Status.BUSY  # e.g. a Desktop thread mid-task
+                s.status = Status.BUSY
             else:
                 self._set_closed(s)
+            # Codex doesn't log approval requests; a tool call stuck this long under an
+            # approval policy is almost always one
+            if (s.status == Status.BUSY and s.pending_since and now - s.pending_since > APPROVAL_GUESS
+                    and s.approval_mode in ("on-request", "untrusted")):
+                s.status, s.waiting_for = Status.WAITING, "approval (probably)"
             if s.status == Status.IDLE and s.last_turn:
                 s.last_turn.done = True
+
+    def _codex_thread_index(self) -> dict[str, dict]:
+        dbs = sorted(self.paths.codex_home.glob("state_*.sqlite"))
+        if not dbs:
+            return {}
+        db = dbs[-1]
+        m = max(_mtime(db), _mtime(Path(str(db) + "-wal")))
+        if m != self._codex_threads[0]:
+            self._codex_threads = (m, load_threads(db))
+        return self._codex_threads[1]
 
     def _codex_thread_names(self) -> dict[str, str]:
         m = _mtime(self.paths.codex_index)

@@ -73,6 +73,8 @@ struct SessionInfo: Decodable, Identifiable {
     let turns: [TurnInfo]
     let hiddenTurns: Int
     let resumeCommand: String
+    let archived: Bool
+    let deletable: Bool  // closed, and its transcript is ours to move to the Trash
 
     var isRinging: Bool { !ringing.isEmpty }
     var isClosed: Bool { status == "closed" }

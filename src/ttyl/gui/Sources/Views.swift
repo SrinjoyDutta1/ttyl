@@ -157,6 +157,7 @@ struct Row: View {
     let s: SessionInfo
     @EnvironmentObject var engine: Engine
     @State private var hover = false
+    @State private var confirmTrash = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -168,6 +169,13 @@ struct Row: View {
                     Text(s.place).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 8)
+                if hover {
+                    Button { engine.archive(s, !s.archived) } label: {
+                        Image(systemName: s.archived ? "tray.and.arrow.up" : "archivebox")
+                    }
+                    .buttonStyle(.borderless).foregroundStyle(.secondary)
+                    .help(s.archived ? "Unarchive" : "Archive: hide it until it does something new")
+                }
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(s.where.isEmpty ? s.when : s.where).font(.system(size: 11, design: .monospaced))
                     if !s.where.isEmpty { Text(s.when).font(.system(size: 10)).foregroundStyle(.tertiary) }
@@ -202,6 +210,25 @@ struct Row: View {
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture { engine.go(s) }
+        .contextMenu {
+            Button(s.isClosed ? "Reopen" : "Go to terminal") { engine.go(s) }
+            Button(s.archived ? "Unarchive" : "Archive") { engine.archive(s, !s.archived) }
+            if !s.resumeCommand.isEmpty {
+                Button("Copy resume command") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(s.resumeCommand, forType: .string)
+                }
+            }
+            if s.deletable {
+                Divider()
+                Button("Move to Trash…", role: .destructive) { confirmTrash = true }
+            }
+        }
+        .confirmationDialog("Move “\(s.title)” to the Trash?", isPresented: $confirmTrash) {
+            Button("Move to Trash", role: .destructive) { engine.trash(s) }
+        } message: {
+            Text("You won't be able to resume it. It goes to your Trash, so you can still put it back.")
+        }
         .help(s.isClosed ? "Click to reopen: \(s.resumeCommand)" : "Click to go to \(s.where.isEmpty ? "it" : s.where)")
     }
 }

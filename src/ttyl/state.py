@@ -60,6 +60,18 @@ class State:
         rec["summary"] = {"text": text, "turns": turns, "at": time.time(), "model": model}
         self.save(force=True)
 
+    def set_archived(self, sid: str, on: bool) -> None:
+        rec = self.sessions.setdefault(sid, {})
+        if on:
+            rec["archived_at"] = time.time()
+        else:
+            rec.pop("archived_at", None)
+        self.save(force=True)
+
+    def forget(self, sid: str) -> None:
+        self.sessions.pop(sid, None)
+        self.save(force=True)
+
     def save(self, force: bool = False) -> None:
         if not self._dirty and not force:
             return

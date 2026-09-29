@@ -110,6 +110,8 @@ final class Engine: ObservableObject {
     }
     func go(id: String) { send(["cmd": "go", "id": id]) }
     func testRing() { send(["cmd": "test_ring"]) }
+    func archive(_ s: SessionInfo, _ on: Bool) { send(["cmd": on ? "archive" : "unarchive", "id": s.id]) }
+    func trash(_ s: SessionInfo) { send(["cmd": "delete", "id": s.id]) }
     func stopRinging(_ s: SessionInfo) { send(["cmd": "ack", "id": s.id]) }
     func setShowAll(_ on: Bool) { send(["cmd": "all", "on": on]) }
     func openTerminalView() { send(["cmd": "open_terminal_view"]) }

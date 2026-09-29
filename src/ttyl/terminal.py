@@ -117,8 +117,22 @@ def focus(tty: str) -> bool:
     return False
 
 
+def codex_link(s: Session) -> str:
+    return f"codex://threads/{s.id}"
+
+
+def open_in_codex(s: Session) -> bool:
+    """Open a Codex Desktop thread in the Codex app."""
+    try:
+        return subprocess.run(["open", codex_link(s)], capture_output=True, timeout=10).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def resume_command(s: Session) -> str:
     """The command that brings a closed session back, in its folder, with its original flags."""
+    if s.agent == "codex" and s.entrypoint == "desktop":
+        return f"open {codex_link(s)}"
     cd = f"cd {shlex.quote(s.cwd)} && " if s.cwd else ""
     if s.agent == "codex":
         return f"{cd}codex resume {s.id}"

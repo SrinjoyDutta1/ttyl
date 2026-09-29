@@ -56,11 +56,14 @@ SECTIONS = [
     Section("finished", "FINISHED", "done in the last day, your move", "bold green3", "✓"),
     Section("idle", "OPEN BUT IDLE", "quiet for over a day", "bold grey70", "●"),
     Section("closed", "CLOSED", "⏎ reopens it where it left off", "bold grey50", "○"),
+    Section("archived", "ARCHIVED", "hidden from the map; new activity brings one back", "bold grey42", "▫"),
 ]
 _BY_KEY = {s.key: s for s in SECTIONS}
 
 
 def section_of(s: Session, now: datetime | None = None) -> Section:
+    if s.archived:
+        return _BY_KEY["archived"]
     if s.status == Status.WAITING:
         return _BY_KEY["needs"]
     if s.status == Status.BUSY:
@@ -156,7 +159,9 @@ def when(s: Session) -> str:
 def where(s: Session) -> str:
     if s.tty:
         return s.tty
-    if s.entrypoint in ("desktop", "bg", "claude-desktop"):
+    if s.agent == "codex" and s.entrypoint == "desktop":
+        return "codex app"
+    if s.entrypoint in ("bg", "claude-desktop"):
         return s.entrypoint
     return ""
 

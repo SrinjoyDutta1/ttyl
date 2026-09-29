@@ -52,7 +52,7 @@ class CodexParser:
     def __init__(self, session: Session):
         self.s = session
         self.turn: Turn | None = None
-        self.pending: dict[str, tuple[list[str], Turn]] = {}  # call_id -> commands
+        self.pending: dict[str, tuple[list[str], Turn, object]] = {}  # call_id -> (commands, turn, when)
 
     def feed(self, d: dict) -> None:
         s = self.s
@@ -72,10 +72,13 @@ class CodexParser:
             s.branch = git.get("branch") or s.branch
         elif kind == "turn_context":
             s.cwd = p.get("cwd") or s.cwd
+            s.approval_mode = p.get("approval_policy") or s.approval_mode
         elif kind == "event_msg":
             self._event(ptype, p, ts)
         elif kind == "response_item":
             self._item(ptype, p, ts)
+        waiting = [when for _, _, when in self.pending.values() if when]
+        s.pending_since = min(waiting) if waiting else None
 
     def _start(self, prompt: str, ts) -> Turn:
         if self.turn:
@@ -102,12 +105,14 @@ class CodexParser:
             if (p.get("message") or "").strip():
                 t.reply = p["message"].strip()
         elif ptype == "task_complete":
+            self.pending.clear()
             if self.turn:
                 self.turn.done = True
                 self.turn.ended = ts or self.turn.ended
                 if (p.get("last_agent_message") or "").strip():
                     self.turn.reply = p["last_agent_message"].strip()
         elif ptype == "turn_aborted":
+            self.pending.clear()
             if self.turn:
                 self.turn.interrupted = True
                 self.turn.done = True
@@ -142,12 +147,12 @@ class CodexParser:
                 t.commands.append(c)
                 t.last_action = "$ " + one_line(short_command(c), 70)
             if p.get("call_id"):
-                self.pending[p["call_id"]] = (cmds, t)
+                self.pending[p["call_id"]] = (cmds, t, ts)
         elif ptype in ("function_call_output", "custom_tool_call_output"):
             call = self.pending.pop(p.get("call_id"), None)
             if not call:
                 return
-            cmds, t = call
+            cmds, t, _ = call
             text = _output_text(p.get("output"))
             m = _EXIT.search(text)
             failed = bool(m and m.group(1) != "0")
@@ -175,3 +180,31 @@ def load_titles(index_path) -> dict[str, str]:
     except OSError:
         pass
     return titles
+
+
+def load_threads(db_path) -> dict[str, dict]:
+    """Codex's own thread index (~/.codex/state_N.sqlite): names, branches, archived flags."""
+    import sqlite3
+
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1)
+    except sqlite3.Error:
+        return {}
+    try:
+        con.row_factory = sqlite3.Row
+        rows = con.execute("select * from threads").fetchall()
+    except sqlite3.Error:
+        return {}
+    finally:
+        con.close()
+    out = {}
+    for r in rows:
+        d = dict(r)
+        out[d["id"]] = {
+            "title": d.get("name") or d.get("title") or "",
+            "branch": d.get("git_branch") or "",
+            "archived": bool(d.get("archived")),
+            "approval_mode": d.get("approval_mode") or "",
+        }
+    return out
+

@@ -9,6 +9,8 @@ every few seconds regardless), and takes one JSON command per line on stdin:
     {"cmd": "refresh"}
     {"cmd": "open_terminal_view"}          open the full TUI in a terminal window
     {"cmd": "test_ring"}                   ring once for the top session (checks sound + notifications)
+    {"cmd": "archive", "id": ...}          hide it from the map ("unarchive" undoes)
+    {"cmd": "delete", "id": ...}           move a closed session's transcript to the Trash
 
 A snapshot's "rings" lists sessions that started ringing since the last one; the
 app posts a notification for each (clicking it sends "go").
@@ -82,6 +84,8 @@ def session_json(s: Session, number: int | None) -> dict:
         "turns": [_turn(s, t) for t in turns[-TURNS:]],
         "hidden_turns": max(0, len(turns) - TURNS),
         "resume_command": terminal.resume_command(s) if s.status == Status.CLOSED else "",
+        "archived": s.archived,
+        "deletable": s.status == Status.CLOSED and not (s.agent == "codex" and s.entrypoint == "desktop"),
     }
 
 
@@ -142,6 +146,18 @@ class Engine:
                 log(f"go {s.project} ({s.tty or render.where(s) or s.status.value}): {self.notices[-1]}")
         elif name == "go" and not getattr(self.store, "demo", False):
             log(f"go {cmd.get('id')}: no such session")
+        elif name in ("archive", "unarchive") and s:
+            if getattr(self.store, "demo", False):
+                self.notices.append(f"demo: would {name} {s.title!r}")
+            else:
+                self.notices.append(self.store.archive(s, name == "archive"))
+        elif name == "delete" and s:
+            if getattr(self.store, "demo", False):
+                self.notices.append(f"demo: would move {s.title!r} to the Trash")
+            else:
+                ok, msg = self.store.trash(s)
+                self.notices.append(msg if ok else f"couldn't delete: {msg}")
+                log(f"delete {s.project}: {msg}")
         elif name == "open_terminal_view":
             terminal.run_in_new_window("ttyl")
         elif name == "test_ring":
@@ -155,6 +171,10 @@ class Engine:
     def _go(self, s: Session) -> str:
         """Bring a session's terminal forward (or reopen it); say what happened."""
         demo = getattr(self.store, "demo", False)
+        if s.agent == "codex" and s.entrypoint == "desktop":
+            if demo:
+                return f"demo: would open {terminal.codex_link(s)}"
+            return f"opening {s.project} in Codex" if terminal.open_in_codex(s) else "couldn't open the Codex app"
         if s.status == Status.CLOSED:
             if demo:
                 return f"demo: would reopen with {terminal.resume_command(s)}"

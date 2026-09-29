@@ -63,8 +63,9 @@ export ANTHROPIC_API_KEY=sk-ant-...   # in ~/.zshrc; the menu bar app picks it u
 ## Use
 
 **Menu bar:** click ☎ for the panel. Click a row to go to that terminal (or reopen it),
-hover a row for its summary, hover a square for that turn. `⋯` opens the full terminal view
-or shows all history.
+hover a row for its summary, hover a square for that turn. Hover a row and click the box
+icon to archive it, or right-click a row for Archive / Move to Trash / Copy resume command.
+`⋯` opens the full terminal view, shows all history, or plays a test ring.
 
 **Terminal view:** `ttyl`
 
@@ -74,7 +75,9 @@ or shows all history.
 |---|---|
 | `1`–`9` | go straight to that session's terminal (or reopen it, if it's closed) |
 | `↑` `↓` then `⏎` | pick one, go to it / reopen it |
-| `a` | toggle recent / all history |
+| `x` | archive (or unarchive) the selected session |
+| `D` `D` | move a closed session to the Trash (press twice) |
+| `a` | toggle recent / all history (archived sessions show up here) |
 | `q` | quit |
 
 **Commands**
@@ -85,6 +88,8 @@ ttyl show 5          # summary + full timeline for the session on ttys005
 ttyl jump api        # bring the tab for project "api…" to the front
 ttyl resume 3f2a9c   # reopen a closed session (by id prefix) in a new window
 ttyl summarize       # write or refresh summaries now
+ttyl archive 5       # hide a session until it does something new (unarchive undoes)
+ttyl delete 3f2a9c   # move a closed session's transcript to the Trash
 ttyl -a              # include all history, not just the last 3 days + everything open
 ttyl --quiet         # no ring sound or notifications (rows still flash)
 ```
@@ -143,11 +148,19 @@ at a time. That includes Codex sessions. Turn it off with `ttyl --no-summaries` 
 
 ### Support
 
-| | map and summary | live status | go to tab |
+| | map and summary | live status | click it |
 |---|---|---|---|
-| Claude Code | ✓ | ✓ exact (from its registry) | ✓ |
-| Codex CLI | ✓ | best effort (process + activity) | ✓ |
-| Codex Desktop | ✓ | best effort | n/a |
+| Claude Code | ✓ | ✓ exact, from its own registry | brings its tab forward; reopens with `claude --resume` |
+| Codex Desktop | ✓ names, branches and archived state from Codex's thread index | working / finished from its log; "needs you" is a best guess* | opens the thread in the Codex app |
+| Codex CLI | ✓ | best effort (process + activity) | brings its tab forward; reopens with `codex resume` |
+
+\* Codex doesn't log approval requests, so ttyl treats a tool call that's been waiting 20+
+seconds under an approval policy as "probably waiting for approval".
+
+**Archive vs. delete:** archiving only hides a session in ttyl (nothing on disk changes) and it
+comes back by itself if the session does anything new. Deleting moves a closed session's
+transcript to your Trash, in a folder with a note saying where it came from, so you can put it
+back.
 
 Going to a tab, reopening, ringing and the menu bar app need macOS (Terminal.app or iTerm2;
 the first use may ask to allow controlling Terminal). The terminal view works anywhere
@@ -157,7 +170,7 @@ Python does.
 
 - `ttyl new claude "fix the holdout test"`: start a session with its goal attached
 - Answer a permission prompt from the menu bar without switching tabs
-- More agents (Gemini CLI, Aider, Cursor's CLI)
+- More agents: Gemini CLI, OpenCode, Cursor's CLI, Aider
 
 ## Development
 

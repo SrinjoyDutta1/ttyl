@@ -102,6 +102,9 @@ class Session:
     tty: str = ""  # "ttys005", "" when none
     live_name: str = ""
     ringing: str = ""  # "needs you" / "finished" while it's trying to get your attention (ring.py)
+    pending_since: datetime | None = None  # a tool call has been waiting for its result since (Codex)
+    approval_mode: str = ""  # Codex: "on-request", "untrusted", "never", ...
+    archived: bool = False  # hidden from the map (by ttyl, or archived in Codex)
 
     # remembered across runs (state.py)
     closed_at: datetime | None = None  # last time its process was seen alive

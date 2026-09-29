@@ -131,6 +131,7 @@ def sessions() -> list[Session]:
 class DemoStore:
     demo = True
     days = 3.0
+    state = None
 
     def __init__(self):
         self.show_all = False
