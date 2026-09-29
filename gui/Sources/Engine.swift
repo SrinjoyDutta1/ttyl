@@ -18,6 +18,7 @@ final class Engine: ObservableObject {
     init(demo: Bool = CommandLine.arguments.contains("--demo"), start: Bool = true) {
         self.demo = demo
         guard start else { return }
+        Notifier.shared.setUp(engine: self)
         launch()
         blink = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -94,6 +95,7 @@ final class Engine: ObservableObject {
             snap = s
             problem = nil
             if let n = s.notices.last { flash(n) }
+            for r in s.rings { Notifier.shared.post(r) }
         }
     }
 
@@ -102,7 +104,9 @@ final class Engine: ObservableObject {
         input.write(data + Data([0x0A]))
     }
 
-    func go(_ s: SessionInfo) { send(["cmd": "go", "id": s.id]) }
+    func go(_ s: SessionInfo) { go(id: s.id) }
+    func go(id: String) { send(["cmd": "go", "id": id]) }
+    func testRing() { send(["cmd": "test_ring"]) }
     func stopRinging(_ s: SessionInfo) { send(["cmd": "ack", "id": s.id]) }
     func setShowAll(_ on: Bool) { send(["cmd": "all", "on": on]) }
     func openTerminalView() { send(["cmd": "open_terminal_view"]) }

@@ -12,7 +12,7 @@ def mk(sid, status, age=timedelta(0)):
 
 
 def quiet() -> Ringer:
-    return Ringer(sound=False, notify=False)
+    return Ringer(sound=False)
 
 
 def test_first_look_rings_only_for_fresh_prompts():

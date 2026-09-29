@@ -62,3 +62,13 @@ def test_json_matches_the_swift_model():
     assert {_camel(k) for k in snap["sections"][0]} == _swift_fields("SectionInfo")
     assert {_camel(k) for k in snap["sessions"][0]} == _swift_fields("SessionInfo")
     assert {_camel(k) for k in snap["sessions"][0]["turns"][0]} == _swift_fields("TurnInfo")
+
+
+def test_rings_are_sent_once_for_the_app_to_notify():
+    engine = Engine(DemoStore(), ring=False, summaries=False)
+    assert engine.tick()["rings"] == []  # rings already going at startup don't notify
+    engine.handle({"cmd": "test_ring"})
+    (ring,) = engine.tick()["rings"]
+    assert ring["reason"] == "needs you" and ring["what"].startswith("approve")
+    assert {_camel(k) for k in ring} == _swift_fields("RingEvent")
+    assert engine.tick()["rings"] == []  # delivered once

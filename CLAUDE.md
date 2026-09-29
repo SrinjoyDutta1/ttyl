@@ -20,7 +20,9 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
   `fallbacks="default"`). Off without credentials; never runs mid-turn; one at a time.
   Tests use a fake client; never hit the API from tests.
 - `ring.py`: which sessions ring (blocked on you, or just finished) until acked; plays a
-  generated double-ring WAV and posts a notification. Only the lock holder (`ringer.pid`,
+  generated double-ring WAV. Notifications are posted natively by the menu bar app from the
+  snapshot's `rings` (never via osascript: macOS attributes those to Script Editor and clicking
+  one opens it). Only the lock holder (`ringer.pid`,
   the menu bar engine when running) makes noise. Tests must use `Ringer(sound=False, notify=False)`.
 - `serve.py`: `ttyl serve`, JSON snapshot lines out, JSON commands in; the menu bar app's engine.
   `tests/test_serve.py` checks the JSON keys against `gui/Sources/Model.swift`; change both together.

@@ -8,6 +8,10 @@ every few seconds regardless), and takes one JSON command per line on stdin:
     {"cmd": "all", "on": true}             include all history
     {"cmd": "refresh"}
     {"cmd": "open_terminal_view"}          open the full TUI in a terminal window
+    {"cmd": "test_ring"}                   ring once for the top session (checks sound + notifications)
+
+A snapshot's "rings" lists sessions that started ringing since the last one; the
+app posts a notification for each (clicking it sends "go").
 
 Exits when stdin closes, so it never outlives the app that started it.
 """
@@ -23,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import render, terminal
 from .model import Session, Status, one_line, plain
-from .ring import Ringer, claim_noise
+from .ring import Ringer, _play, claim_noise, ring_event
 from .summarize import Summarizer, enabled_by_env, load_key_from_shell
 
 TURNS = 14
@@ -72,7 +76,8 @@ def session_json(s: Session, number: int | None) -> dict:
     }
 
 
-def snapshot(sessions: list[Session], show_all: bool = False, notices: list[str] | None = None) -> dict:
+def snapshot(sessions: list[Session], show_all: bool = False, notices: list[str] | None = None,
+             rings: list[dict] | None = None) -> dict:
     groups = render.grouped(sessions)
     out_sessions, number = [], 0
     for _, members in groups:
@@ -87,6 +92,7 @@ def snapshot(sessions: list[Session], show_all: bool = False, notices: list[str]
         "needs_you": sum(s.status == Status.WAITING for s in sessions),
         "show_all": show_all,
         "notices": notices or [],
+        "rings": rings or [],
     }
 
 
@@ -96,7 +102,8 @@ class Engine:
     def __init__(self, store, ring: bool = True, summaries: bool = True):
         self.store = store
         demo = getattr(store, "demo", False)
-        self.ringer = Ringer(sound=ring and not demo, notify=ring and not demo)
+        self.ringer = Ringer(sound=ring and not demo)
+        self.rings: list[dict] = []
         self.summarizer = Summarizer(getattr(store, "state", None)) if summaries and enabled_by_env() and not demo else None
         self.sessions: list[Session] = []
         self.notices: list[str] = []
@@ -104,10 +111,10 @@ class Engine:
 
     def tick(self) -> dict:
         self.sessions = self.store.refresh()
-        self.ringer.update(self.sessions)
+        self.rings += [ring_event(s) for s in self.ringer.update(self.sessions)]
         self._maybe_summarize()
-        snap = snapshot(self.sessions, getattr(self.store, "show_all", False), self.notices)
-        self.notices = []
+        snap = snapshot(self.sessions, getattr(self.store, "show_all", False), self.notices, self.rings)
+        self.notices, self.rings = [], []
         return snap
 
     def handle(self, cmd: dict) -> None:
@@ -136,6 +143,13 @@ class Engine:
                 self.notices.append(f"{s.project} runs in {render.where(s) or 'no terminal'}")
         elif name == "open_terminal_view":
             terminal.run_in_new_window("ttyl")
+        elif name == "test_ring":
+            ordered = render.ordered(self.sessions)
+            if ordered:
+                top = ordered[0]
+                self.rings.append(ring_event(top, top.ringing or ("needs you" if top.status == Status.WAITING else "finished")))
+            if self.ringer.sound:
+                _play()
 
     def _maybe_summarize(self) -> None:
         if self.summarizer is None or self._summarizing:

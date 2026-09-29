@@ -9,10 +9,19 @@ struct Snapshot: Decodable {
     let needsYou: Int
     let showAll: Bool
     let notices: [String]
+    let rings: [RingEvent]  // sessions that started ringing since the last snapshot
 
     func members(of section: SectionInfo) -> [SessionInfo] {
         sessions.filter { $0.section == section.key }
     }
+}
+
+struct RingEvent: Decodable {
+    let id: String
+    let project: String
+    let title: String
+    let reason: String  // "needs you" | "finished"
+    let what: String
 }
 
 struct SectionInfo: Decodable, Identifiable {

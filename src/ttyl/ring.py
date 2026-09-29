@@ -2,9 +2,12 @@
 
 A session starts ringing when it becomes blocked on you, or when it finishes a
 turn. It keeps ringing until you go to it (or it gets busy again because you
-answered in the terminal). New rings play a phone ring and post a macOS
-notification; only one ttyl process makes noise at a time (the menu bar app,
-when it's running).
+answered in the terminal). New rings play a phone ring; only one ttyl process
+makes noise at a time (the menu bar app, when it's running).
+
+System notifications are posted by the menu bar app, natively, so clicking one
+takes you to the session. (Posting them from here via osascript made macOS
+attribute them to Script Editor, and clicking one opened Script Editor.)
 """
 
 from __future__ import annotations
@@ -80,15 +83,6 @@ def someone_else_rings() -> bool:
         return False
 
 
-def _notify(title: str, subtitle: str, body: str) -> None:
-    script = "on run argv\n display notification (item 3 of argv) with title (item 1 of argv) subtitle (item 2 of argv)\nend run"
-    try:
-        subprocess.Popen(["osascript", "-e", script, title, subtitle, body],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except OSError:
-        pass
-
-
 def _play() -> None:
     try:
         subprocess.Popen(["afplay", str(ring_sound())], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -97,9 +91,8 @@ def _play() -> None:
 
 
 class Ringer:
-    def __init__(self, sound: bool = True, notify: bool = True):
+    def __init__(self, sound: bool = True):
         self.sound = sound and os.environ.get("TTYL_SOUND", "1") != "0" and sys.platform == "darwin"
-        self.notify = notify and os.environ.get("TTYL_NOTIFY", "1") != "0" and sys.platform == "darwin"
         self.ringing: dict[str, str] = {}  # session id -> NEEDS_YOU | FINISHED
         self._last: dict[str, Status] = {}
         self._started = False
@@ -138,15 +131,19 @@ class Ringer:
         self.ringing.pop(sid, None)
 
     def _make_noise(self, new: list[Session]) -> None:
-        if someone_else_rings():
-            return
-        if self.sound:
+        if self.sound and not someone_else_rings():
             _play()
-        if self.notify:
-            for s in new[:3]:
-                last = s.last_turn
-                if s.ringing == NEEDS_YOU:
-                    what = f"approve {last.last_action}" if last and last.last_action and "permission" in s.waiting_for else (s.waiting_for or "waiting for you")
-                else:
-                    what = s.title
-                _notify("☎ ring ring", f"{s.project}: {s.ringing}", what)
+
+
+def ring_event(s: Session, reason: str = "") -> dict:
+    """What the menu bar app needs to post a notification for a new ring."""
+    reason = reason or s.ringing
+    last = s.last_turn
+    if reason == NEEDS_YOU:
+        if last and last.last_action and "permission" in s.waiting_for:
+            what = f"approve {last.last_action}"
+        else:
+            what = s.waiting_for or "waiting for you"
+    else:
+        what = s.title
+    return {"id": s.id, "project": s.project, "title": s.title, "reason": reason, "what": what}

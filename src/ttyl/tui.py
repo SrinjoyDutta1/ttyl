@@ -65,7 +65,7 @@ class TtylApp(App):
                  summaries: bool = True, ring: bool = True):
         super().__init__()
         demo = getattr(store, "demo", False)
-        self.ringer = Ringer(sound=ring and not demo, notify=ring and not demo)
+        self.ringer = Ringer(sound=ring and not demo)
         self._phase = True
         self.store = store or default_store()
         self.interval = interval

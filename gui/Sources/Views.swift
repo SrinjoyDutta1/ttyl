@@ -255,6 +255,7 @@ struct Footer: View {
             } else {
             Menu {
                 Button("Open terminal view") { engine.openTerminalView() }
+                Button("Test ring") { engine.testRing() }
                 Toggle("Show all history", isOn: Binding(
                     get: { engine.snap?.showAll ?? false }, set: { engine.setShowAll($0) }))
                 Divider()
