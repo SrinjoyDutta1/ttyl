@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from .model import Session, Status, one_line, plain
 from .state import State
 
-MODEL = os.environ.get("AGT_SUMMARY_MODEL", "claude-opus-5-5")
+MODEL = os.environ.get("TTYL_SUMMARY_MODEL", "claude-opus-5-5")
 
 SYSTEM = """\
 You write the note a developer reads when they switch back to one of the many terminal \
@@ -145,5 +145,24 @@ class Summarizer:
         return text
 
 
+def load_key_from_shell(timeout: float = 5.0) -> bool:
+    """Apps launched from the menu bar don't inherit your shell's environment. If no
+    Anthropic credentials are set, ask your login shell for ANTHROPIC_API_KEY once."""
+    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
+        return True
+    import subprocess
+
+    shell = os.environ.get("SHELL") or "/bin/zsh"
+    try:
+        out = subprocess.run([shell, "-lic", 'printf "\n__key=%s\n" "$ANTHROPIC_API_KEY"'], stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=timeout, start_new_session=True).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    key = next((ln[6:] for ln in out.splitlines() if ln.startswith("__key=")), "").strip()
+    if key:
+        os.environ["ANTHROPIC_API_KEY"] = key
+    return bool(key)
+
+
 def enabled_by_env() -> bool:
-    return os.environ.get("AGT_SUMMARIES", "1").lower() not in ("0", "false", "off", "no")
+    return os.environ.get("TTYL_SUMMARIES", "1").lower() not in ("0", "false", "off", "no")

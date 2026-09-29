@@ -1,0 +1,80 @@
+import Foundation
+
+// Mirrors the JSON that `ttyl serve` prints (src/ttyl/serve.py).
+
+struct Snapshot: Decodable {
+    let sections: [SectionInfo]
+    let sessions: [SessionInfo]
+    let ringing: Int
+    let needsYou: Int
+    let showAll: Bool
+    let notices: [String]
+
+    func members(of section: SectionInfo) -> [SessionInfo] {
+        sessions.filter { $0.section == section.key }
+    }
+}
+
+struct SectionInfo: Decodable, Identifiable {
+    let key: String
+    let title: String
+    let hint: String
+    let count: Int
+    var id: String { key }
+}
+
+struct TurnInfo: Decodable {
+    let kind: String  // edit | run | chat | commit | fail | active | waiting
+    let time: String
+    let prompt: String
+    let files: Int
+    let commits: [String]
+
+    var tooltip: String {
+        var lines = ["\(time)  \(prompt)"]
+        if files > 0 { lines.append("✎ edited \(files) file\(files == 1 ? "" : "s")") }
+        lines += commits.map { "◆ \($0)" }
+        let what: [String: String] = [
+            "edit": "changed files", "run": "ran tools, changed nothing", "chat": "just conversation",
+            "commit": "made a commit", "fail": "interrupted or errored", "active": "running now",
+            "waiting": "waiting on you",
+        ]
+        if let w = what[kind] { lines.append(w) }
+        return lines.joined(separator: "\n")
+    }
+}
+
+struct SessionInfo: Decodable, Identifiable {
+    let id: String
+    let number: Int?
+    let section: String
+    let title: String
+    let project: String
+    let branch: String
+    let agent: String
+    let status: String
+    let ringing: String
+    let `where`: String
+    let when: String
+    let action: String
+    let summary: String
+    let recap: String
+    let lastAsk: String
+    let lastReply: String
+    let turns: [TurnInfo]
+    let hiddenTurns: Int
+    let resumeCommand: String
+
+    var isRinging: Bool { !ringing.isEmpty }
+    var isClosed: Bool { status == "closed" }
+    var place: String { branch.isEmpty ? project : "\(project) · \(branch)" }
+    var about: String { summary.isEmpty ? recap : summary }
+}
+
+extension JSONDecoder {
+    static let ttyl: JSONDecoder = {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        return d
+    }()
+}

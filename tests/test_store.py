@@ -5,9 +5,9 @@ from datetime import timedelta
 
 import pytest
 
-from agentterm import procs as proclib
-from agentterm.model import Kind, Status
-from agentterm.store import Paths, Store, find
+from ttyl import procs as proclib
+from ttyl.model import Kind, Status
+from ttyl.store import Paths, Store, find
 
 from helpers import T0, Claude
 

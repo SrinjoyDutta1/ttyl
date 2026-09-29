@@ -1,4 +1,4 @@
-"""What agt remembers between runs, in ~/.local/state/agentterm/state.json.
+"""What ttyl remembers between runs, in ~/.local/state/ttyl/state.json.
 
 Per session: where it lived, the flags it was launched with, the last time its
 process was seen alive, and its saved summary. That's what lets a terminal you
@@ -19,8 +19,11 @@ SAVE_EVERY = 15.0  # seconds; live timestamps change every refresh, the disk doe
 
 
 def default_path() -> Path:
-    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
-    return Path(base) / "agentterm" / "state.json"
+    base = Path(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"))
+    old, new = base / "agentterm", base / "ttyl"
+    if old.is_dir() and not new.exists():
+        old.rename(new)  # this project used to be called agentterm
+    return new / "state.json"
 
 
 class State:

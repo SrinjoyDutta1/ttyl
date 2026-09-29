@@ -345,5 +345,5 @@ def find(sessions: list[Session], query: str) -> Session | None:
 
 
 def default_store() -> Store:
-    days = float(os.environ.get("AGT_DAYS", "3"))
+    days = float(os.environ.get("TTYL_DAYS", "3"))
     return Store(days=days, state=State())

@@ -3,10 +3,10 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from agentterm.claude import ClaudeParser
-from agentterm.model import Commit, Session, Status, Turn
-from agentterm.state import State
-from agentterm.summarize import Summarizer, digest
+from ttyl.claude import ClaudeParser
+from ttyl.model import Commit, Session, Status, Turn
+from ttyl.state import State
+from ttyl.summarize import Summarizer, digest
 
 from helpers import Claude
 

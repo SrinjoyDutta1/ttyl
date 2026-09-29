@@ -1,12 +1,13 @@
-"""agt: a map of your agent terminals.
+"""ttyl: a map of your agent terminals.
 
-  agt                 live map (TUI)
-  agt ls              print the map once
-  agt show <which>    one session: recap + turn timeline
-  agt jump <which>    focus the terminal tab that session runs in
-  agt resume <which>  reopen a closed session in a new terminal window
-  agt summarize [which]  write (or refresh) AI summaries now
-  agt --demo          try it on made-up sessions
+  ttyl                 live map (TUI)
+  ttyl ls              print the map once
+  ttyl show <which>    one session: recap + turn timeline
+  ttyl jump <which>    focus the terminal tab that session runs in
+  ttyl resume <which>  reopen a closed session in a new terminal window
+  ttyl summarize [which]  write (or refresh) AI summaries now
+  ttyl serve          JSON engine for the menu bar app (see gui/)
+  ttyl --demo          try it on made-up sessions
 
 <which> is an id prefix, a tty (ttys005 or 5), a pid, a project name or part of a title.
 """
@@ -40,8 +41,9 @@ def main(argv: list[str] | None = None) -> int:
     common.add_argument("--days", type=float, default=3.0, help="recent window for closed sessions (default 3)")
     common.add_argument("--demo", action="store_true", help="show made-up sessions instead of yours")
     common.add_argument("--no-summaries", action="store_true", help="don't send session excerpts to Claude for summaries")
+    common.add_argument("--quiet", action="store_true", help="no ring sound or notifications (rows still flash)")
 
-    ap = argparse.ArgumentParser(prog="agt", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, parents=[common])
+    ap = argparse.ArgumentParser(prog="ttyl", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, parents=[common])
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("ls", parents=[common], help="print the map once")
     show = sub.add_parser("show", parents=[common], help="recap + timeline for one session")
@@ -53,12 +55,21 @@ def main(argv: list[str] | None = None) -> int:
     resume.add_argument("which")
     summ = sub.add_parser("summarize", parents=[common], help="write AI summaries now (one session, or all that need one)")
     summ.add_argument("which", nargs="?")
+    srv = sub.add_parser("serve", parents=[common], help="stream JSON snapshots for the menu bar app")
+    srv.add_argument("--once", action="store_true", help="print one snapshot and exit")
+    srv.add_argument("--interval", type=float, default=2.0)
     args = ap.parse_args(argv)
+
+    if args.cmd == "serve":
+        from .serve import serve
+
+        return serve(_store(args), interval=args.interval, once=args.once, ring=not args.quiet,
+                     summaries=not args.no_summaries)
 
     if args.cmd is None:
         from .tui import run
 
-        run(_store(args), summaries=not args.no_summaries)
+        run(_store(args), summaries=not args.no_summaries, ring=not args.quiet)
         return 0
 
     console = Console(highlight=False)
@@ -92,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "jump":
         if not s.tty:
-            console.print(f"{s.project} isn't in a terminal ({s.status.value}); try: agt resume {s.id[:8]}")
+            console.print(f"{s.project} isn't in a terminal ({s.status.value}); try: ttyl resume {s.id[:8]}")
             return 1
         return 0 if terminal.focus(s.tty) else 1
     if args.cmd == "resume":

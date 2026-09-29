@@ -1,5 +1,5 @@
-from agentterm.claude import ClaudeParser
-from agentterm.model import Kind, Session
+from ttyl.claude import ClaudeParser
+from ttyl.model import Kind, Session
 
 from helpers import Claude
 

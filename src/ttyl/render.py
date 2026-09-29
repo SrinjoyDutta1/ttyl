@@ -1,4 +1,4 @@
-"""Rich renderables shared by `agt ls`/`agt show` and the TUI.
+"""Rich renderables shared by `ttyl ls`/`ttyl show` and the TUI.
 
 Design rule: glance, pick, go. Sessions are grouped by what they need from you,
 the urgent groups get an extra line saying exactly what, and everything else
@@ -177,8 +177,18 @@ def _right(s: Session) -> Text:
     return Text.assemble((age, "grey50"), ("  " + where(s) if where(s) else "", "grey62"))
 
 
-def lane(s: Session, number: int | None = None, count: int = SQUARES) -> RenderableType:
-    """One session: `n  title   project · branch   ■ ■ □ ◆   ttys005`, plus an action line if urgent."""
+RING_STYLE = "bold magenta"
+
+
+def ring_badge(phase: bool = True) -> Text:
+    return Text("☎ ring ring" if phase else "☏ ring ring", RING_STYLE if phase else "magenta")
+
+
+def lane(s: Session, number: int | None = None, count: int = SQUARES, phase: bool = True) -> RenderableType:
+    """One session: `n  title   project · branch   ■ ■ □ ◆   ttys005`, plus an action line if urgent.
+
+    A ringing session shows a phone instead of its number and a `ring ring` line;
+    `phase` flips twice a second so it flashes."""
     closed = s.status == Status.CLOSED
     row = Table.grid(expand=True, padding=(0, 1))
     row.add_column(width=2, no_wrap=True)
@@ -186,21 +196,33 @@ def lane(s: Session, number: int | None = None, count: int = SQUARES) -> Rendera
     row.add_column(ratio=3, no_wrap=True, overflow="ellipsis")
     row.add_column(width=squares_width(count), no_wrap=True)
     row.add_column(width=13, no_wrap=True, justify="right")
+    if s.ringing:
+        num = Text("☎" if phase else "☏", RING_STYLE if phase else "magenta")
+    else:
+        num = Text(str(number) if number else "", "bold" if not closed else "grey50")
     row.add_row(
-        Text(str(number) if number else "", "bold" if not closed else "grey50"),
+        num,
         Text(s.title, "grey62" if closed or not s.visible_turns else "bold"),
         Text(place(s), "grey50"),
         squares(s, count),
         _right(s),
     )
     act = action(s)
+    if s.ringing == "finished" and act is None:
+        reply = next((t.reply for t in reversed(s.visible_turns) if t.reply), "")
+        act = Text.assemble(("finished  ", "bold green3"), (one_line(plain(reply), 120), "grey70"))
     if act is None:
         return row
+    line = Text("↳ ", "grey50")
+    if s.ringing:
+        line.append_text(ring_badge(phase))
+        line.append("  ")
+    line.append_text(act)
     second = Table.grid(expand=True, padding=(0, 1))
     second.add_column(width=2)
     second.add_column(ratio=1, no_wrap=True, overflow="ellipsis")
     second.add_column(width=13, no_wrap=True, justify="right")
-    second.add_row("", Text.assemble(("↳ ", "grey50"), act), Text(when(s), "grey62"))
+    second.add_row("", line, Text(when(s), "grey62"))
     return Group(row, second)
 
 
@@ -233,9 +255,13 @@ def header(sessions: list[Session]) -> Text:
     counts = {sec.key: 0 for sec in SECTIONS}
     for s in sessions:
         counts[section_of(s).key] += 1
-    out = Text.assemble(("agentterm", "bold"), "   ")
+    out = Text.assemble(("ttyl", "bold"), "   ")
+    ringing = sum(bool(s.ringing) for s in sessions)
+    if ringing:
+        out.append(f" ☎ ring ring ×{ringing} ", "bold white on magenta")
+        out.append("   ")
     if counts["needs"]:
-        out.append(f" ▣ {counts['needs']} need{'s' * (counts['needs'] == 1)} you ", "bold white on magenta")
+        out.append(f"▣ {counts['needs']} need{'s' * (counts['needs'] == 1)} you", "bold magenta")
     else:
         out.append("✓ nothing needs you", "green3")
     for key, label, style in (("working", "working", "cyan"), ("finished", "finished", "green3"),
@@ -350,12 +376,12 @@ def recap(s: Session, short_id: bool = True, hint: str = "") -> RenderableType:
         parts.append(Text())
         parts.extend(tail)
 
-    if s.status == Status.CLOSED and not short_id:  # `agt show`: the command to copy
+    if s.status == Status.CLOSED and not short_id:  # `ttyl show`: the command to copy
         parts.append(Text())
         parts.append(Text.assemble(("reopen with  ", "grey50"), (resume_command(s), "grey70")))
     return Group(*parts)
 
 
 def show(s: Session, width: int, limit: int = 40) -> RenderableType:
-    """`agt show`: recap, then the timeline."""
+    """`ttyl show`: recap, then the timeline."""
     return Group(recap(s, short_id=False), Text(), _heading("TIMELINE"), timeline(s, limit, width), Text(), LEGEND)

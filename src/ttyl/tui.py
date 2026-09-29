@@ -16,6 +16,7 @@ from textual.widgets.option_list import Option
 
 from . import render, terminal
 from .model import Session, Status
+from .ring import Ringer
 from .store import Store, default_store
 from .summarize import Summarizer, enabled_by_env
 
@@ -30,11 +31,11 @@ def _signature(s: Session) -> tuple:
     last = s.last_turn
     return (render.section_of(s).key, s.id, s.status, s.title, s.branch, s.tty, len(s.visible_turns),
             last.kind if last else None, last.last_action if last else "", render.when(s), s.waiting_for,
-            s.summary_turns)
+            s.summary_turns, s.ringing)
 
 
-class AgentTermApp(App):
-    TITLE = "agentterm"
+class TtylApp(App):
+    TITLE = "ttyl"
     CSS = """
     #bar { height: 1; padding: 0 1; background: $panel; }
     #lanes { height: auto; max-height: 60%; border: none; padding: 0; background: $background; }
@@ -61,8 +62,11 @@ class AgentTermApp(App):
     ]
 
     def __init__(self, store: Store | None = None, interval: float = 2.0, summarizer: Summarizer | None = None,
-                 summaries: bool = True):
+                 summaries: bool = True, ring: bool = True):
         super().__init__()
+        demo = getattr(store, "demo", False)
+        self.ringer = Ringer(sound=ring and not demo, notify=ring and not demo)
+        self._phase = True
         self.store = store or default_store()
         self.interval = interval
         if summarizer is None and summaries and enabled_by_env() and not getattr(self.store, "demo", False):
@@ -90,6 +94,7 @@ class AgentTermApp(App):
         self.query_one(Lanes).focus()
         self.action_refresh()
         self.set_interval(self.interval, self.action_refresh)
+        self.set_interval(0.5, self._blink)
 
     def on_resize(self) -> None:
         self._sig = []  # lane layout depends on width
@@ -104,6 +109,9 @@ class AgentTermApp(App):
         self.call_from_thread(self._update, sessions)
 
     def _update(self, sessions: list[Session]) -> None:
+        for s in self.ringer.update(sessions):
+            self.notify(f"{s.project}: {s.title}", title=f"☎ ring ring · {s.ringing}",
+                        severity="warning" if s.ringing == "needs you" else "information")
         self._announce(sessions)
         self.sessions = sessions
         self._draw()
@@ -140,28 +148,47 @@ class AgentTermApp(App):
         return ""
 
     def _announce(self, sessions: list[Session]) -> None:
-        """Toast when a lane starts needing you, finishes its turn, or its terminal closes."""
+        """Toast when a terminal closes (rings cover needing you and finishing)."""
         first = not self._last_status
         for s in sessions:
             before = self._last_status.get(s.id)
             self._last_status[s.id] = s.status
             if first or before == s.status:
                 continue
-            if s.status == Status.WAITING:
-                self.notify(f"{s.project}: {s.waiting_for or 'waiting for you'}", title="needs you", severity="warning")
-                self.bell()
-            elif before == Status.BUSY and s.status == Status.IDLE:
-                self.notify(f"{s.project}: {s.title}", title="finished")
-            elif before is not None and s.status == Status.CLOSED:
+            if before is not None and s.status == Status.CLOSED:
                 self.notify(f"{s.title}\nselect it and press ⏎ to reopen", title=f"{s.project}: terminal closed",
                             severity="warning")
             if s.status != Status.CLOSED:
                 self._reopened.pop(s.id, None)  # it's back
 
+    def _blink(self) -> None:
+        ringing = [s for s in self.order if s.ringing]
+        if not ringing:
+            return
+        self._phase = not self._phase
+        lanes = self.query_one(Lanes)
+        count = render.squares_for(self.size.width)
+        for s in ringing:
+            number = self.order.index(s) + 1
+            try:
+                lanes.replace_option_prompt(s.id, render.lane(s, number if number <= 9 else None, count, self._phase))
+            except Exception:  # the option list is mid-rebuild
+                return
+
+    def _stop_ringing(self, s: Session) -> None:
+        if s.ringing:
+            self.ringer.ack(s.id)
+            s.ringing = ""
+            self._sig = []
+            self._draw()
+
     def _draw(self) -> None:
         bar = render.header(self.sessions)
-        scope = "all history" if self.store.show_all else f"last {self.store.days:g}d + everything open"
-        bar.append(f"      {scope}", "grey42")
+        if self.store.show_all:
+            bar.append("   all history", "grey42")
+        if self.size.width >= 150:
+            bar.append("      squares = turns, newest on the right:  ", "grey42")
+            bar.append_text(render.LEGEND)
         self.query_one("#bar", Static).update(bar)
 
         groups = render.grouped(self.sessions)
@@ -181,7 +208,8 @@ class AgentTermApp(App):
             options.append(Option(Group(Text(), rule) if options else rule, id=f"§{sec.key}", disabled=True))
             for s in members:
                 number += 1
-                options.append(Option(render.lane(s, number if number <= 9 else None, render.squares_for(self.size.width)), id=s.id))
+                options.append(Option(render.lane(s, number if number <= 9 else None, render.squares_for(self.size.width),
+                                                  self._phase), id=s.id))
         keep = self.selected if any(s.id == self.selected for s in self.order) else None
         lanes.clear_options()
         lanes.add_options(options)
@@ -238,6 +266,7 @@ class AgentTermApp(App):
         s = self._current()
         if s is None:
             return
+        self._stop_ringing(s)
         if s.status == Status.CLOSED:
             self.action_reopen()
             return
@@ -282,5 +311,5 @@ class AgentTermApp(App):
         self.action_refresh()
 
 
-def run(store: Store | None = None, summaries: bool = True) -> None:
-    AgentTermApp(store, summaries=summaries).run()
+def run(store: Store | None = None, summaries: bool = True, ring: bool = True) -> None:
+    TtylApp(store, summaries=summaries, ring=ring).run()

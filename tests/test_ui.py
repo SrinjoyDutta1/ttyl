@@ -4,12 +4,12 @@ from datetime import datetime, timedelta, timezone
 
 from rich.console import Console
 
-from agentterm import render
-from agentterm.claude import ClaudeParser
-from agentterm.cli import main
-from agentterm.demo import DemoStore
-from agentterm.model import Session, Status
-from agentterm.tui import AgentTermApp
+from ttyl import render
+from ttyl.claude import ClaudeParser
+from ttyl.cli import main
+from ttyl.demo import DemoStore
+from ttyl.model import Session, Status
+from ttyl.tui import TtylApp
 
 from helpers import Claude
 
@@ -91,7 +91,7 @@ async def test_tui_navigates_numbers_and_announces():
     a = session("a", many_turns(2), status=Status.BUSY, tty="ttys001")
     b = session("b", many_turns(5), status=Status.IDLE, tty="ttys002")
     store = FakeStore([a, b])
-    app = AgentTermApp(store, interval=60)
+    app = TtylApp(store, interval=60)
     async with app.run_test(size=(140, 40)) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
@@ -111,8 +111,11 @@ async def test_tui_navigates_numbers_and_announces():
         app.action_refresh()
         await app.workers.wait_for_complete()
         await pilot.pause()
-        assert any(n.title == "needs you" for n in app._notifications)
+        assert a.ringing == "needs you"
+        assert any("ring ring" in (n.title or "") and "needs you" in n.title for n in app._notifications)
         assert app.order[0] is a and app.selected == "b"  # selection survives the reshuffle
+        await pilot.press("1")  # go to it: the ringing stops
+        assert a.ringing == "" and not app.ringer.ringing
 
         await pilot.press("a")
         await app.workers.wait_for_complete()
@@ -120,7 +123,7 @@ async def test_tui_navigates_numbers_and_announces():
 
 
 async def test_tui_runs_on_demo_data():
-    app = AgentTermApp(DemoStore(), interval=60)
+    app = TtylApp(DemoStore(), interval=60)
     async with app.run_test(size=(120, 40)) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
@@ -128,7 +131,7 @@ async def test_tui_runs_on_demo_data():
 
 
 async def test_enter_on_a_closed_session_reopens_it_once(monkeypatch):
-    from agentterm import terminal
+    from ttyl import terminal
 
     calls = []
     monkeypatch.setattr(terminal, "reopen", lambda s: calls.append(s.id) or True)
@@ -139,7 +142,7 @@ async def test_enter_on_a_closed_session_reopens_it_once(monkeypatch):
         demo = False
 
     store = Store([live, closed])
-    app = AgentTermApp(store, interval=60, summaries=False)
+    app = TtylApp(store, interval=60, summaries=False, ring=False)
     async with app.run_test(size=(140, 40)) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
@@ -155,7 +158,7 @@ async def test_enter_on_a_closed_session_reopens_it_once(monkeypatch):
 async def test_toast_when_a_terminal_closes():
     s = session("a", many_turns(2), status=Status.IDLE, tty="ttys001")
     store = FakeStore([s])
-    app = AgentTermApp(store, interval=60)
+    app = TtylApp(store, interval=60)
     async with app.run_test(size=(140, 40)) as pilot:
         await app.workers.wait_for_complete()
         s.status, s.tty = Status.CLOSED, ""

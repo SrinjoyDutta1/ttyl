@@ -1,4 +1,6 @@
-# agentterm: notes for agents working on this repo
+# ttyl: notes for agents working on this repo
+
+ttyl (talk to you later) watches every Claude Code / Codex session and rings when one needs you.
 
 Dev setup: `python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'`, then `.venv/bin/pytest -q`.
 To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo data with
@@ -12,11 +14,20 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
 - `render.py`: Rich renderables shared by the CLI and the TUI (sections, lanes, recap, timeline).
 - `tui.py`: the Textual app. `cli.py`: entry point. `demo.py`: made-up sessions.
 - `terminal.py`: AppleScript focus/reopen for Terminal.app and iTerm2.
-- `state.py`: `~/.local/state/agentterm/state.json`, sessions seen alive (cwd, launch flags,
+- `state.py`: `~/.local/state/ttyl/state.json`, sessions seen alive (cwd, launch flags,
   last_live) and saved summaries. Keeps closed terminals on the map and reopenable.
 - `summarize.py`: model-written summaries via the `anthropic` SDK (`claude-opus-5-5`, effort low,
   `fallbacks="default"`). Off without credentials; never runs mid-turn; one at a time.
   Tests use a fake client; never hit the API from tests.
+- `ring.py`: which sessions ring (blocked on you, or just finished) until acked; plays a
+  generated double-ring WAV and posts a notification. Only the lock holder (`ringer.pid`,
+  the menu bar engine when running) makes noise. Tests must use `Ringer(sound=False, notify=False)`.
+- `serve.py`: `ttyl serve`, JSON snapshot lines out, JSON commands in; the menu bar app's engine.
+  `tests/test_serve.py` checks the JSON keys against `gui/Sources/Model.swift`; change both together.
+- `gui/`: SwiftUI menu bar app, built by `gui/build.sh` with plain swiftc (SourceKit errors in
+  single files are noise; the build compiles them together). It runs the engine directly, not via
+  a shell: an interactive login shell hung when launched from the app.
+  `ttyl-bar --snapshot out.png` renders the panel on demo data (menus can't be snapshotted).
 
 ## UI rule
 Glance, pick, go. Group by what the session needs from the user; urgent lanes get a second

@@ -106,9 +106,12 @@ def resume_command(s: Session) -> str:
     return f"{cd}claude --resume {s.id}{flags}"
 
 
-def reopen(s: Session) -> bool:
-    """Open a new terminal window that resumes this session."""
-    cmd = resume_command(s)
+def run_in_new_window(cmd: str) -> bool:
     if os.environ.get("TERM_PROGRAM") == "iTerm.app":
         return not _osascript(_OPEN_ITERM, cmd).startswith("error")
     return not _osascript(_OPEN_TERMINAL, cmd).startswith("error")
+
+
+def reopen(s: Session) -> bool:
+    """Open a new terminal window that resumes this session."""
+    return run_in_new_window(resume_command(s))

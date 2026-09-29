@@ -5,12 +5,12 @@ import os
 
 import pytest
 
-from agentterm import procs as proclib
-from agentterm.model import Session, Status
-from agentterm.procs import launch_args
-from agentterm.state import State
-from agentterm.store import Paths, Store
-from agentterm.terminal import resume_command
+from ttyl import procs as proclib
+from ttyl.model import Session, Status
+from ttyl.procs import launch_args
+from ttyl.state import State
+from ttyl.store import Paths, Store
+from ttyl.terminal import resume_command
 
 from helpers import Claude
 
@@ -61,7 +61,7 @@ def test_accidentally_closed_terminal_stays_and_reopens_as_it_was(home):
     assert resume_command(s).endswith("claude --resume old --dangerously-skip-permissions")
 
     store.state.save(force=True)
-    (again,) = Store(paths, days=3, state=State(state_file)).refresh()  # agt restarted
+    (again,) = Store(paths, days=3, state=State(state_file)).refresh()  # ttyl restarted
     assert again.id == "old" and again.status == Status.CLOSED and again.launch_args == s.launch_args
 
 

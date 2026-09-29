@@ -1,7 +1,7 @@
 [project]
-name = "agentterm"
-version = "0.1.0"
-description = "A map of every coding agent you have running: which terminal needs you, and where each one left off."
+name = "ttyl"
+version = "0.2.0"
+description = "Your coding agents on one screen, and they call you (ring ring) when they need you."
 readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Srinjoy Dutta"}]
@@ -17,13 +17,13 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/SrinjoyDutta1/agentterm"
+Homepage = "https://github.com/SrinjoyDutta1/ttyl"
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
 
 [project.scripts]
-agt = "agentterm.cli:main"
+ttyl = "ttyl.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -1,4 +1,4 @@
-"""`agt --demo`: a made-up afternoon of agent sessions.
+"""`ttyl --demo`: a made-up afternoon of agent sessions.
 
 For screenshots and for trying the UI without touching real transcripts.
 """
@@ -121,6 +121,9 @@ def sessions() -> list[Session]:
             ("drop the unused plugins", "edit", [".zshrc"]),
         ], closed=60 * 25, updated=60 * 26, reply="Startup is 180ms now, down from 2.1s."),
     ]
+    for s in out:
+        if s.title.startswith("Dark mode"):
+            s.ringing = "finished"  # just finished; the phone is ringing
     out.sort(key=_sort_key)
     return out
 

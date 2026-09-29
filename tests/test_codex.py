@@ -1,7 +1,7 @@
 import json
 
-from agentterm.codex import CodexParser, load_titles
-from agentterm.model import Kind, Session
+from ttyl.codex import CodexParser, load_titles
+from ttyl.model import Kind, Session
 
 from helpers import codex_line
 

@@ -101,6 +101,7 @@ class Session:
     pid: int | None = None
     tty: str = ""  # "ttys005", "" when none
     live_name: str = ""
+    ringing: str = ""  # "needs you" / "finished" while it's trying to get your attention (ring.py)
 
     # remembered across runs (state.py)
     closed_at: datetime | None = None  # last time its process was seen alive

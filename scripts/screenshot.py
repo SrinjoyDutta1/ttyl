@@ -1,4 +1,4 @@
-"""Render the TUI on demo data to docs/*.png (via headless Chrome; falls back to .svg).
+"""Render the TUI (and the menu bar panel, if gui/ is built) on demo data to docs/*.png.
 
     .venv/bin/python scripts/screenshot.py
 """
@@ -10,15 +10,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-from agentterm.demo import DemoStore
-from agentterm.tui import AgentTermApp
+from ttyl.demo import DemoStore
+from ttyl.tui import TtylApp
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 
 async def shoot(name: str, size: tuple[int, int], keys: list[str]) -> Path:
-    app = AgentTermApp(DemoStore(), interval=3600)
+    app = TtylApp(DemoStore(), interval=3600)
     async with app.run_test(size=size) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause(0.3)
@@ -45,7 +45,11 @@ def to_png(svg: Path) -> None:
 
 async def main() -> None:
     DOCS.mkdir(exist_ok=True)
-    shots = [await shoot("agt", (132, 42), []), await shoot("agt-closed", (132, 42), ["down"] * 6)]
+    shots = [await shoot("ttyl", (132, 42), []), await shoot("ttyl-closed", (132, 42), ["down"] * 6)]
+    bar = Path(__file__).resolve().parent.parent / "gui" / "build" / "ttyl.app" / "Contents" / "MacOS" / "ttyl-bar"
+    if bar.exists():  # the menu bar panel, drawn by the app itself
+        subprocess.run([str(bar), "--snapshot", str(DOCS / "menubar.png")], check=True, capture_output=True)
+        print(DOCS / "menubar.png")
     for svg in shots:
         to_png(svg)
         print(svg.with_suffix(".png") if svg.with_suffix(".png").exists() else svg)
