@@ -183,6 +183,21 @@ def _right(s: Session) -> Text:
 
 
 RING_STYLE = "bold magenta"
+COLLIDE_STYLE = "bold dark_orange"
+
+
+def collision_text(s: Session, width: int = 200) -> Text | None:
+    """`⚠ src/limits.py is also being edited by codex · Add request logging (ttys008)`"""
+    if not s.collisions:
+        return None
+    path, others = s.collisions[0]
+    rel = s.rel(path)
+    who = ", ".join(f"{o.agent} · {o.title}" + (f" ({where(o)})" if where(o) else "") for o in others)
+    out = Text.assemble(("⚠ ", COLLIDE_STYLE), (rel, COLLIDE_STYLE), (" is also being edited by ", "dark_orange"),
+                        (who, "bold"))
+    if len(s.collisions) > 1:
+        out.append(f"  +{len(s.collisions) - 1} more file{'s' * (len(s.collisions) > 2)}", "grey50")
+    return out
 
 
 def ring_badge(phase: bool = True) -> Text:
@@ -216,18 +231,22 @@ def lane(s: Session, number: int | None = None, count: int = SQUARES, phase: boo
     if s.ringing == "finished" and act is None:
         reply = next((t.reply for t in reversed(s.visible_turns) if t.reply), "")
         act = Text.assemble(("finished  ", "bold green3"), (one_line(plain(reply), 120), "grey70"))
-    if act is None:
+    clash = collision_text(s)
+    if act is None and clash is None:
         return row
-    line = Text("↳ ", "grey50")
-    if s.ringing:
-        line.append_text(ring_badge(phase))
-        line.append("  ")
-    line.append_text(act)
     second = Table.grid(expand=True, padding=(0, 1))
     second.add_column(width=2)
     second.add_column(ratio=1, no_wrap=True, overflow="ellipsis")
     second.add_column(width=13, no_wrap=True, justify="right")
-    second.add_row("", line, Text(when(s), "grey62"))
+    if act is not None:
+        line = Text("↳ ", "grey50")
+        if s.ringing:
+            line.append_text(ring_badge(phase))
+            line.append("  ")
+        line.append_text(act)
+        second.add_row("", line, Text(when(s), "grey62"))
+    if clash is not None:
+        second.add_row("", clash, "")
     return Group(row, second)
 
 
@@ -264,6 +283,10 @@ def header(sessions: list[Session]) -> Text:
     ringing = sum(bool(s.ringing) for s in sessions)
     if ringing:
         out.append(f" ☎ ring ring ×{ringing} ", "bold white on magenta")
+        out.append("   ")
+    clashes = len({path for s in sessions for path, _ in s.collisions})
+    if clashes:
+        out.append(f" ⚠ {clashes} collision{'s' * (clashes != 1)} ", "bold white on dark_orange3")
         out.append("   ")
     if counts["needs"]:
         out.append(f"▣ {counts['needs']} need{'s' * (counts['needs'] == 1)} you", "bold magenta")
@@ -337,6 +360,12 @@ def recap(s: Session, short_id: bool = True, hint: str = "") -> RenderableType:
         status.append_text(Text.assemble("   ", ("⏎", "bold"), (f" go to {s.tty}", "grey62")))
     parts.append(status)
     parts.append(Text())
+    if s.collisions:
+        parts.append(Text("⚠ COLLISION", COLLIDE_STYLE))
+        for path, others in s.collisions:
+            who = "; ".join(f"{o.agent} · {o.title}" + (f" ({where(o)})" if where(o) else "") for o in others)
+            parts.append(Text.assemble((s.rel(path), "dark_orange"), " is also being edited by ", (who, "bold")))
+        parts.append(Text())
 
     last = s.last_turn
     replied = [t for t in s.visible_turns if t.reply]

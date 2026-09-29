@@ -90,6 +90,17 @@ def _play() -> None:
         pass
 
 
+def alert_sound() -> None:
+    """A different sound from the phone ring: something's wrong, not someone's calling."""
+    if sys.platform != "darwin" or os.environ.get("TTYL_SOUND", "1") == "0" or someone_else_rings():
+        return
+    try:
+        subprocess.Popen(["afplay", "/System/Library/Sounds/Funk.aiff"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        pass
+
+
 class Ringer:
     def __init__(self, sound: bool = True):
         self.sound = sound and os.environ.get("TTYL_SOUND", "1") != "0" and sys.platform == "darwin"

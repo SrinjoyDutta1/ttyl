@@ -127,7 +127,7 @@ async def test_tui_runs_on_demo_data():
     async with app.run_test(size=(120, 40)) as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
-        assert len(app.order) == 8 and app.order[0].status == Status.WAITING
+        assert len(app.order) == 9 and app.order[0].status == Status.WAITING
 
 
 async def test_enter_on_a_closed_session_reopens_it_once(monkeypatch):

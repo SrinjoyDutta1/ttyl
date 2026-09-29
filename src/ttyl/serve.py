@@ -12,8 +12,9 @@ every few seconds regardless), and takes one JSON command per line on stdin:
     {"cmd": "archive", "id": ...}          hide it from the map ("unarchive" undoes)
     {"cmd": "delete", "id": ...}           move a closed session's transcript to the Trash
 
-A snapshot's "rings" lists sessions that started ringing since the last one; the
-app posts a notification for each (clicking it sends "go").
+A snapshot's "rings" lists sessions that started ringing since the last one, and
+"alerts" lists new collisions (two sessions editing the same file); the app posts
+a notification for each (clicking it sends "go").
 
 Exits when stdin closes, so it never outlives the app that started it.
 """
@@ -27,9 +28,9 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import render, terminal
+from . import collide, render, terminal
 from .model import Session, Status, one_line, plain
-from .ring import Ringer, _play, claim_noise, ring_event, state_dir
+from .ring import Ringer, _play, alert_sound, claim_noise, ring_event, state_dir
 from .summarize import Summarizer, enabled_by_env, load_key_from_shell
 
 TURNS = 14
@@ -85,12 +86,14 @@ def session_json(s: Session, number: int | None) -> dict:
         "hidden_turns": max(0, len(turns) - TURNS),
         "resume_command": terminal.resume_command(s) if s.status == Status.CLOSED else "",
         "archived": s.archived,
+        "collisions": [{"path": s.rel(path), "with": [collide.describe(s, o) for o in others]}
+                       for path, others in s.collisions],
         "deletable": s.status == Status.CLOSED and not (s.agent == "codex" and s.entrypoint == "desktop"),
     }
 
 
 def snapshot(sessions: list[Session], show_all: bool = False, notices: list[str] | None = None,
-             rings: list[dict] | None = None) -> dict:
+             rings: list[dict] | None = None, alerts: list[dict] | None = None) -> dict:
     groups = render.grouped(sessions)
     out_sessions, number = [], 0
     for _, members in groups:
@@ -106,7 +109,16 @@ def snapshot(sessions: list[Session], show_all: bool = False, notices: list[str]
         "show_all": show_all,
         "notices": notices or [],
         "rings": rings or [],
+        "alerts": alerts or [],
+        "collisions": len({path for s in sessions for path, _ in s.collisions}),
     }
+
+
+def collision_alert(c: collide.Collision) -> dict:
+    first = c.sessions[0]
+    names = " and ".join(f"{s.agent} ({render.where(s) or s.project})" for s in c.sessions[:3])
+    return {"id": first.id, "title": f"⚠ collision in {first.project}",
+            "text": f"{names} are both editing {first.rel(c.path)}"}
 
 
 class Engine:
@@ -117,6 +129,8 @@ class Engine:
         demo = getattr(store, "demo", False)
         self.ringer = Ringer(sound=ring and not demo)
         self.rings: list[dict] = []
+        self.ring_enabled = ring and not demo
+        self._seen_collisions: set[str] | None = None
         self.summarizer = Summarizer(getattr(store, "state", None)) if summaries and enabled_by_env() and not demo else None
         self.sessions: list[Session] = []
         self.notices: list[str] = []
@@ -125,10 +139,23 @@ class Engine:
     def tick(self) -> dict:
         self.sessions = self.store.refresh()
         self.rings += [ring_event(s) for s in self.ringer.update(self.sessions)]
+        alerts = self._new_collisions()
         self._maybe_summarize()
-        snap = snapshot(self.sessions, getattr(self.store, "show_all", False), self.notices, self.rings)
+        snap = snapshot(self.sessions, getattr(self.store, "show_all", False), self.notices, self.rings, alerts)
         self.notices, self.rings = [], []
         return snap
+
+    def _new_collisions(self) -> list[dict]:
+        """Alert once per new collision (ones already happening when ttyl starts stay quiet)."""
+        current = {c.key: c for c in getattr(self.store, "collisions", [])}
+        if self._seen_collisions is None:
+            self._seen_collisions = set(current)
+            return []
+        new = [c for k, c in current.items() if k not in self._seen_collisions]
+        self._seen_collisions = set(current)
+        if new and self.ring_enabled:
+            alert_sound()
+        return [collision_alert(c) for c in new]
 
     def handle(self, cmd: dict) -> None:
         name = cmd.get("cmd")

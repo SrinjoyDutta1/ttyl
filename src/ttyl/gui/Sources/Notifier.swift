@@ -29,6 +29,18 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    func post(_ alert: AlertEvent) {
+        let content = UNMutableNotificationContent()
+        content.title = alert.title
+        content.body = alert.text
+        content.userInfo = ["id": alert.id]
+        let request = UNNotificationRequest(identifier: "alert-\(alert.id)-\(Date().timeIntervalSince1970)",
+                                            content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { Log.write("notification failed: \(error.localizedDescription)") }
+        }
+    }
+
     // show banners even while the panel is open
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {

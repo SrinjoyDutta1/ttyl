@@ -16,7 +16,7 @@ from textual.widgets.option_list import Option
 
 from . import render, terminal
 from .model import Session, Status
-from .ring import Ringer
+from .ring import Ringer, alert_sound
 from .store import Store, default_store
 from .summarize import Summarizer, enabled_by_env
 
@@ -31,7 +31,7 @@ def _signature(s: Session) -> tuple:
     last = s.last_turn
     return (render.section_of(s).key, s.id, s.status, s.title, s.branch, s.tty, len(s.visible_turns),
             last.kind if last else None, last.last_action if last else "", render.when(s), s.waiting_for,
-            s.summary_turns, s.ringing)
+            s.summary_turns, s.ringing, tuple(p for p, _ in s.collisions))
 
 
 class TtylApp(App):
@@ -77,6 +77,8 @@ class TtylApp(App):
         self._summarizing = False
         self._reopened: dict[str, float] = {}  # session id -> when we asked the terminal to reopen it
         self._delete_armed: tuple[str, float] | None = None  # first D press: (session, when)
+        self._seen_collisions: set[str] | None = None
+        self._ring_enabled = ring and not demo
         self.sessions: list[Session] = []
         self.order: list[Session] = []  # display order; index + 1 is the lane's number
         self.selected: str | None = None
@@ -116,6 +118,7 @@ class TtylApp(App):
             self.notify(f"{s.project}: {s.title}", title=f"☎ ring ring · {s.ringing}",
                         severity="warning" if s.ringing == "needs you" else "information")
         self._announce(sessions)
+        self._announce_collisions()
         self.sessions = sessions
         self._draw()
         self._summarize_next()
@@ -163,6 +166,18 @@ class TtylApp(App):
                             severity="warning")
             if s.status != Status.CLOSED:
                 self._reopened.pop(s.id, None)  # it's back
+
+    def _announce_collisions(self) -> None:
+        current = {c.key: c for c in getattr(self.store, "collisions", [])}
+        if self._seen_collisions is not None:
+            for key, c in current.items():
+                if key not in self._seen_collisions:
+                    names = " and ".join(f"{s.agent} ({render.where(s) or s.project})" for s in c.sessions[:3])
+                    self.notify(f"{names} are both editing {c.sessions[0].rel(c.path)}",
+                                title=f"⚠ collision in {c.sessions[0].project}", severity="warning", timeout=10)
+                    if self._ring_enabled:
+                        alert_sound()
+        self._seen_collisions = set(current)
 
     def _blink(self) -> None:
         ringing = [s for s in self.order if s.ringing]

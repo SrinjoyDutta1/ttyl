@@ -97,6 +97,7 @@ final class Engine: ObservableObject {
             problem = nil
             if let n = s.notices.last { flash(n) }
             for r in s.rings { Notifier.shared.post(r) }
+            for a in s.alerts { Notifier.shared.post(a) }
         }
     }
 

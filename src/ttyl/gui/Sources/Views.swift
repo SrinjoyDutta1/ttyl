@@ -10,6 +10,7 @@ enum Palette {
     static let commit = Color(red: 0.98, green: 0.62, blue: 0.20)
     static let fail = Color(red: 0.95, green: 0.30, blue: 0.35)
     static let active = Color(red: 0.25, green: 0.80, blue: 0.90)
+    static let clash = Color(red: 1.0, green: 0.55, blue: 0.15)
 
     static func section(_ key: String) -> Color {
         switch key {
@@ -99,27 +100,42 @@ struct Header: View {
     @EnvironmentObject var engine: Engine
 
     var body: some View {
-        HStack(spacing: 10) {
-            Text("ttyl").font(.system(size: 15, weight: .bold, design: .rounded))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("ttyl").font(.system(size: 15, weight: .bold, design: .rounded))
+                if let snap = engine.snap {
+                    if snap.ringing > 0 {
+                        badge(engine.phase ? "☎ ring ring" : "☏ ring ring", Palette.ring)
+                    }
+                    if snap.collisions > 0 {
+                        badge("⚠ \(snap.collisions) collision\(snap.collisions == 1 ? "" : "s")", Palette.clash)
+                            .help("Two sessions are editing the same file")
+                    }
+                }
+                Spacer()
+            }
             if let snap = engine.snap {
-                if snap.ringing > 0 {
-                    Text(engine.phase ? "☎ ring ring" : "☏ ring ring")
-                        .font(.system(size: 11, weight: .bold))
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(Capsule().fill(Palette.ring))
-                        .foregroundStyle(.white)
+                HStack(spacing: 12) {
+                    ForEach(snap.sections) { sec in
+                        Text("\(sec.count) \(sec.title.lowercased())")
+                            .font(.system(size: 11, weight: sec.key == "needs" ? .semibold : .regular))
+                            .foregroundStyle(Palette.section(sec.key))
+                            .lineLimit(1).fixedSize()
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer()
-                ForEach(snap.sections) { sec in
-                    Text("\(sec.count) \(sec.title.lowercased())")
-                        .font(.system(size: 11, weight: sec.key == "needs" ? .semibold : .regular))
-                        .foregroundStyle(Palette.section(sec.key))
-                }
-            } else {
-                Spacer()
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
+    }
+
+    private func badge(_ text: String, _ color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold))
+            .lineLimit(1).fixedSize()
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(color))
+            .foregroundStyle(.white)
     }
 }
 
@@ -193,6 +209,13 @@ struct Row: View {
                         .lineLimit(1)
                 }
                 .padding(.leading, 30)
+            }
+            ForEach(Array(s.collisions.enumerated()), id: \.offset) { _, c in
+                (Text("⚠ \(c.path)").foregroundStyle(Palette.clash).bold()
+                 + Text(" is also being edited by ").foregroundStyle(Palette.clash)
+                 + Text(c.with.joined(separator: ", ")))
+                    .font(.system(size: 11)).lineLimit(2)
+                    .padding(.leading, 30)
             }
             Squares(turns: s.turns, hidden: s.hiddenTurns).padding(.leading, 30)
             if hover && !s.about.isEmpty {

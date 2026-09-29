@@ -24,6 +24,8 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
   snapshot's `rings` (never via osascript: macOS attributes those to Script Editor and clicking
   one opens it). Only the lock holder (`ringer.pid`,
   the menu bar engine when running) makes noise. Tests must use `Ringer(sound=False, notify=False)`.
+- `collide.py`: collision warnings, sessions (any agent, one still open) that edited the same absolute
+  path within 60 min. `Session.collisions` feeds the lanes, recap, JSON and one-time alerts.
 - `serve.py`: `ttyl serve`, JSON snapshot lines out, JSON commands in; the menu bar app's engine.
   `tests/test_serve.py` checks the JSON keys against `src/ttyl/gui/Sources/Model.swift`; change both together.
 - `gui/` (inside the package, `src/ttyl/gui`, so pipx installs ship it): SwiftUI menu bar app,

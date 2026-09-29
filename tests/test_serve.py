@@ -15,6 +15,7 @@ def test_snapshot_groups_numbers_and_rings():
     engine = Engine(DemoStore(), ring=False, summaries=False)
     snap = engine.tick()
     assert [s["key"] for s in snap["sections"]] == ["needs", "working", "finished", "idle", "closed"]
+    assert snap["collisions"] == 1
     first = snap["sessions"][0]
     assert first["number"] == 1 and first["ringing"] == "needs you" and first["action"].startswith("approve")
     assert snap["ringing"] == 2 and snap["needs_you"] == 1
@@ -62,6 +63,10 @@ def test_json_matches_the_swift_model():
     assert {_camel(k) for k in snap["sections"][0]} == _swift_fields("SectionInfo")
     assert {_camel(k) for k in snap["sessions"][0]} == _swift_fields("SessionInfo")
     assert {_camel(k) for k in snap["sessions"][0]["turns"][0]} == _swift_fields("TurnInfo")
+    clash = next(s for s in snap["sessions"] if s["collisions"])["collisions"][0]
+    assert {_camel(k) for k in clash} == _swift_fields("CollisionInfo")
+    from ttyl.serve import collision_alert
+    assert {_camel(k) for k in collision_alert(store.collisions[0])} == _swift_fields("AlertEvent")
 
 
 def test_rings_are_sent_once_for_the_app_to_notify():

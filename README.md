@@ -15,6 +15,9 @@ takes you to the right terminal.
 
 - **Ring ring.** A session rings when it's blocked on you (a permission prompt, a question)
   or finishes its turn. It stops once you go to it.
+- **Collision warnings.** "⚠ `src/limits.py` is also being edited by codex (ttys008)": when two
+  sessions, from any agents, edit the same file within the hour, both get flagged and you get a
+  notification. No single agent can see this; ttyl sees all of them.
 - **Grouped by what they need from you:** `NEEDS YOU`, `WORKING`, `FINISHED`,
   `OPEN BUT IDLE`, `CLOSED`. Urgent ones say exactly what they want
   ("approve `git push -u origin feat/rate-limits`").
@@ -156,6 +159,10 @@ at a time. That includes Codex sessions. Turn it off with `ttyl --no-summaries` 
 
 \* Codex doesn't log approval requests, so ttyl treats a tool call that's been waiting 20+
 seconds under an approval policy as "probably waiting for approval".
+
+**Collisions:** two or more sessions (at least one still open) that edited the same file in the
+last hour. Paths are compared after resolving each agent's relative paths against its working
+directory; the agents' own memory/plan files are ignored.
 
 **Archive vs. delete:** archiving only hides a session in ttyl (nothing on disk changes) and it
 comes back by itself if the session does anything new. Deleting moves a closed session's

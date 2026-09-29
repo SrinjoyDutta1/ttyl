@@ -10,6 +10,8 @@ struct Snapshot: Decodable {
     let showAll: Bool
     let notices: [String]
     let rings: [RingEvent]  // sessions that started ringing since the last snapshot
+    let alerts: [AlertEvent]  // new collisions since the last snapshot
+    let collisions: Int  // files being edited by two sessions at once
 
     func members(of section: SectionInfo) -> [SessionInfo] {
         sessions.filter { $0.section == section.key }
@@ -22,6 +24,17 @@ struct RingEvent: Decodable {
     let title: String
     let reason: String  // "needs you" | "finished"
     let what: String
+}
+
+struct AlertEvent: Decodable {
+    let id: String  // the session a click on the notification goes to
+    let title: String
+    let text: String
+}
+
+struct CollisionInfo: Decodable {
+    let path: String
+    let with: [String]
 }
 
 struct SectionInfo: Decodable, Identifiable {
@@ -74,6 +87,7 @@ struct SessionInfo: Decodable, Identifiable {
     let hiddenTurns: Int
     let resumeCommand: String
     let archived: Bool
+    let collisions: [CollisionInfo]
     let deletable: Bool  // closed, and its transcript is ours to move to the Trash
 
     var isRinging: Bool { !ringing.isEmpty }

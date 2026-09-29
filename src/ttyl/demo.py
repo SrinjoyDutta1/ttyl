@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
+from . import collide
 from .model import Commit, Session, Status, Turn
 from .store import _sort_key
 
@@ -81,6 +82,12 @@ def sessions() -> list[Session]:
             ("run it 50 times", "active", "$ npx playwright test checkout --repeat-each 50"),
         ], summary="Tracking down why the checkout e2e test fails about one run in five. The cause was a race: the Pay button rendered before the price request resolved, so it now waits on the price query. It is running the test 50 times to prove the flake is gone.", updated=0, pid=41907, reply="Found it: the Pay button renders before the price request resolves. "
                                        "I made the button wait on the price query instead of a timeout."),
+        _session("codex", "api-gateway", "main", "Add structured request logging", Status.BUSY, "ttys008", [
+            ("log every request as JSON, include the tenant id", "edit", ["src/middleware.py", "src/limits.py"]),
+            ("run the logging tests", "active", "$ pytest tests/test_logging.py -q"),
+        ], updated=0, pid=42377,
+            summary="Adding JSON request logging to the gateway, with the tenant id on every line. It changed "
+                    "middleware.py and limits.py and is running the logging tests."),
         _session("codex", "ml-pipeline", "exp/lora", "Sweep LoRA ranks on the eval set", Status.BUSY, "ttys007", [
             ("set up a sweep over lora ranks 4, 8, 16, 32", "edit", ["sweep.py", "configs/lora.yaml"]),
             ("use the held-out eval split, not dev", "edit", ["configs/lora.yaml"]),
@@ -138,4 +145,5 @@ class DemoStore:
         self._sessions = sessions()
 
     def refresh(self) -> list[Session]:
+        self.collisions = collide.annotate(self._sessions)
         return self._sessions

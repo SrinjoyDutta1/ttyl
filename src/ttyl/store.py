@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from . import collide
 from . import procs as proclib
 from .claude import ClaudeParser
 from .codex import CodexParser, load_threads, load_titles
@@ -134,6 +135,7 @@ class Store:
         self._codex_threads: tuple[float, dict[str, dict]] = (-1.0, {})
         self._codex_cwds: dict[int, str | None] = {}  # pid -> cwd, lsof is slow
         self._git = _GitCache()
+        self.collisions: list[collide.Collision] = []
 
     # -- public -------------------------------------------------------------
 
@@ -202,6 +204,7 @@ class Store:
 
         keep = [s for s in sessions if (s.status != Status.CLOSED or s.visible_turns)
                 and (self.show_all or not s.archived)]
+        self.collisions = collide.annotate(keep)
         keep.sort(key=_sort_key)
         return keep
 

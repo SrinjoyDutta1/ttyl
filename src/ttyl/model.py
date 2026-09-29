@@ -105,6 +105,7 @@ class Session:
     pending_since: datetime | None = None  # a tool call has been waiting for its result since (Codex)
     approval_mode: str = ""  # Codex: "on-request", "untrusted", "never", ...
     archived: bool = False  # hidden from the map (by ttyl, or archived in Codex)
+    collisions: list = field(default_factory=list)  # [(abs path, [other sessions editing it])] (collide.py)
 
     # remembered across runs (state.py)
     closed_at: datetime | None = None  # last time its process was seen alive
