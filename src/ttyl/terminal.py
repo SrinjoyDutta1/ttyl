@@ -19,6 +19,9 @@ on run argv
     repeat with w in windows
       repeat with t in tabs of w
         if tty of t is target then
+          try
+            set miniaturized of w to false
+          end try
           set selected tab of w to t
           set index of w to 1
           activate

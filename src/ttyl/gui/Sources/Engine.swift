@@ -20,6 +20,7 @@ final class Engine: ObservableObject {
         guard start else { return }
         Notifier.shared.setUp(engine: self)
         launch()
+        if CommandLine.arguments.contains("--self-test-panel") { selfTestPanel() }
         blink = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, (self.snap?.ringing ?? 0) > 0 else { return }
@@ -121,6 +122,31 @@ final class Engine: ObservableObject {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 6_000_000_000)
             if self.notice == text { self.notice = nil }
+        }
+    }
+
+    /// `ttyl-bar --demo --self-test-panel`: open the panel, close it the way a row click does,
+    /// report whether each worked, and exit. For checking the close trick without a mouse.
+    private func selfTestPanel() {
+        func after(_ secs: Double, _ step: @escaping @MainActor () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + secs) { MainActor.assumeIsolated { step() } }
+        }
+        after(2.0) {
+            print("status item found: \(Panel.statusButton != nil)")
+            Panel.open()
+        }
+        after(3.5) {
+            print("panel opened: \(Panel.window != nil)")
+            Panel.close()
+        }
+        after(4.5) {
+            print("panel closed: \(Panel.window == nil)")
+            Panel.open()
+        }
+        after(6.0) {
+            print("panel reopens after a programmatic close: \(Panel.window != nil)")
+            Panel.close()
+            self.quit()
         }
     }
 

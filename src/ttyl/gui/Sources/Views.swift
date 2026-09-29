@@ -209,9 +209,9 @@ struct Row: View {
         )
         .contentShape(Rectangle())
         .onHover { hover = $0 }
-        .onTapGesture { engine.go(s) }
+        .onTapGesture { open() }
         .contextMenu {
-            Button(s.isClosed ? "Reopen" : "Go to terminal") { engine.go(s) }
+            Button(s.isClosed ? "Reopen" : "Go to terminal") { open() }
             Button(s.archived ? "Unarchive" : "Archive") { engine.archive(s, !s.archived) }
             if !s.resumeCommand.isEmpty {
                 Button("Copy resume command") {
@@ -230,6 +230,46 @@ struct Row: View {
             Text("You won't be able to resume it. It goes to your Trash, so you can still put it back.")
         }
         .help(s.isClosed ? "Click to reopen: \(s.resumeCommand)" : "Click to go to \(s.where.isEmpty ? "it" : s.where)")
+    }
+}
+
+extension Row {
+    /// Go there, and get the panel out of the way so the terminal is the only thing you see.
+    func open() {
+        engine.go(s)
+        if s.hasDestination { Panel.close() }
+    }
+}
+
+/// The MenuBarExtra panel. SwiftUI can't close it from code, so we click its status item
+/// (which keeps SwiftUI's idea of "open" in sync), the same trick MenuBarExtraAccess uses.
+@MainActor
+enum Panel {
+    static var window: NSWindow? {
+        NSApp.windows.first { $0.isVisible && $0.className.contains("MenuBarExtra") }
+    }
+
+    static var statusButton: NSStatusBarButton? {
+        for w in NSApp.windows where w.className.contains("NSStatusBarWindow") {
+            if w.responds(to: NSSelectorFromString("statusItem")),
+               let item = w.value(forKey: "statusItem") as? NSStatusItem {
+                return item.button
+            }
+        }
+        return nil
+    }
+
+    static func close() {
+        guard let panel = window else { return }
+        if let button = statusButton {
+            button.performClick(nil)
+        } else {
+            panel.close()
+        }
+    }
+
+    static func open() {
+        if window == nil { statusButton?.performClick(nil) }
     }
 }
 

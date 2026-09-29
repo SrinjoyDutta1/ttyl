@@ -77,6 +77,8 @@ struct SessionInfo: Decodable, Identifiable {
     let deletable: Bool  // closed, and its transcript is ours to move to the Trash
 
     var isRinging: Bool { !ringing.isEmpty }
+    /// Clicking it takes you somewhere (a tab, a reopened window, the Codex app), so the panel should get out of the way.
+    var hasDestination: Bool { isClosed || (!`where`.isEmpty && `where` != "bg") }
     var isClosed: Bool { status == "closed" }
     var place: String { branch.isEmpty ? project : "\(project) · \(branch)" }
     var about: String { summary.isEmpty ? recap : summary }

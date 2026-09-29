@@ -33,6 +33,8 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
   `ttyl-bar --snapshot out.png` renders the panel on demo data (menus can't be snapshotted);
   `--snapshot-live` lays out the real panel, scroll view included, in an offscreen window. build.sh
   runs it and fails if the list collapses (a ScrollView in a MenuBarExtra window has no natural height).
+  Clicking a row closes the panel (`Panel.close()` clicks the status item; SwiftUI has no API for it);
+  `ttyl-bar --demo --self-test-panel` opens/closes it programmatically and prints whether it worked.
 
 ## UI rule
 Glance, pick, go. Group by what the session needs from the user; urgent lanes get a second
