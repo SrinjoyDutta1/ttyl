@@ -57,6 +57,19 @@ def is_codex_cli(p: Proc) -> bool:
     return any(os.path.basename(t) == "codex" for t in tokens[:2])
 
 
+def is_agent_cli(p: Proc, name: str) -> bool:
+    """A terminal agent by name: a `gemini` binary, or `node …/gemini.js` (also its relaunched child)."""
+    if not p.tty:
+        return False
+    for tok in p.command.split()[:4]:
+        base = os.path.basename(tok)
+        for ext in (".js", ".mjs", ".cjs"):
+            base = base[: -len(ext)] if base.endswith(ext) else base
+        if base == name:
+            return True
+    return False
+
+
 # Flags worth carrying over when a closed Claude Code session is reopened:
 # name -> how many values follow it
 CLAUDE_KEEP = {"--dangerously-skip-permissions": 0, "--model": 1, "--permission-mode": 1, "--add-dir": 1}

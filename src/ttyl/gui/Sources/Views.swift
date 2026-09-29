@@ -12,6 +12,16 @@ enum Palette {
     static let active = Color(red: 0.25, green: 0.80, blue: 0.90)
     static let clash = Color(red: 1.0, green: 0.55, blue: 0.15)
 
+    static func agent(_ name: String) -> Color {
+        switch name {
+        case "claude": return Color(red: 0.85, green: 0.47, blue: 0.34)
+        case "codex": return Color(red: 0.06, green: 0.64, blue: 0.50)
+        case "gemini": return Color(red: 0.30, green: 0.55, blue: 0.96)
+        case "qwen": return Color(red: 0.55, green: 0.36, blue: 0.96)
+        default: return .secondary
+        }
+    }
+
     static func section(_ key: String) -> Color {
         switch key {
         case "needs": return ring
@@ -182,7 +192,13 @@ struct Row: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(s.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                         .foregroundStyle(s.isClosed ? .secondary : .primary)
-                    Text(s.place).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                    HStack(spacing: 5) {
+                        Text(s.agent).font(.system(size: 10, weight: .bold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(Palette.agent(s.agent).opacity(0.22)))
+                            .foregroundStyle(Palette.agent(s.agent))
+                        Text(s.place).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 8)
                 if hover {

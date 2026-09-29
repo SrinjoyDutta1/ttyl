@@ -166,6 +166,13 @@ def where(s: Session) -> str:
     return ""
 
 
+AGENT_STYLE = {"claude": "#d97757", "codex": "#10a37f", "gemini": "#4c8bf5", "qwen": "#8b5cf6"}
+
+
+def agent_tag(s: Session) -> Text:
+    return Text(s.agent, f"bold {AGENT_STYLE.get(s.agent, 'grey62')}")
+
+
 def place(s: Session) -> str:
     out = s.project
     if s.branch and s.branch != "HEAD":
@@ -223,7 +230,7 @@ def lane(s: Session, number: int | None = None, count: int = SQUARES, phase: boo
     row.add_row(
         num,
         Text(s.title, "grey62" if closed or not s.visible_turns else "bold"),
-        Text(place(s), "grey50"),
+        Text.assemble(agent_tag(s), ("  " + place(s), "grey50")),
         squares(s, count),
         _right(s),
     )

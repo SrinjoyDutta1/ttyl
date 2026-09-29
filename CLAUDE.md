@@ -9,7 +9,10 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
 
 ## Layout
 - `model.py`: agent-neutral `Session` (a lane) and `Turn` (a square). `Turn.kind` decides the square.
-- `claude.py` / `codex.py`: incremental parsers, `feed(event)` one JSONL line at a time.
+- `claude.py` / `codex.py` / `gemini.py` / `qwen.py`: incremental parsers, `feed(event)` one JSONL line
+  at a time (`PARSERS` in store.py). Gemini re-appends whole messages (last copy of an id wins) and
+  has `$set` / `$rewindTo` records, so `GeminiParser` rebuilds turns in `flush()` after each batch.
+  Gemini/Qwen were built from their source (clones were in the scratchpad), not real sessions.
 - `store.py`: finds transcripts, tails them by byte offset, joins live state (registry, `ps`) and git commits.
 - `render.py`: Rich renderables shared by the CLI and the TUI (sections, lanes, recap, timeline).
 - `tui.py`: the Textual app. `cli.py`: entry point. `demo.py`: made-up sessions.

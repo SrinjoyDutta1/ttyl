@@ -108,7 +108,7 @@ def sessions() -> list[Session]:
             ("plan again", "run"),
         ], summary="Moving the logs bucket to us-east-2 without destroying it. It replaced the destroy-and-recreate plan with a moved block in logs.tf, and the plan is now clean (0 to destroy). Next step is yours: terraform apply -target=module.logs.", updated=60 * 72, pid=38801, reply="The plan is clean now: 0 to destroy, 1 to change.\n"
                                             "Apply it when you're ready: terraform apply -target=module.logs"),
-        _session("codex", "docs-site", "main", "Rewrite the quickstart", Status.IDLE, "ttys006", [
+        _session("gemini", "docs-site", "main", "Rewrite the quickstart", Status.IDLE, "ttys006", [
             ("the quickstart is too long, what would you cut?", "chat"),
             ("do it", "edit", ["docs/quickstart.md"]),
             ("add a copy button to code blocks", "edit", ["src/components/Code.tsx"]),

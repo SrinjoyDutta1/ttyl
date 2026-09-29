@@ -1,6 +1,7 @@
 # ttyl ☎
 
 **Your coding agents on one screen, and they call you when they need you.**
+Claude Code, Codex, Gemini CLI and Qwen Code, side by side.
 
 <img src="docs/menubar.png" alt="the ttyl menu bar panel: sessions grouped by what they need, two of them ringing" width="520">
 
@@ -156,9 +157,15 @@ at a time. That includes Codex sessions. Turn it off with `ttyl --no-summaries` 
 | Claude Code | ✓ | ✓ exact, from its own registry | brings its tab forward; reopens with `claude --resume` |
 | Codex Desktop | ✓ names, branches and archived state from Codex's thread index | working / finished from its log; "needs you" is a best guess* | opens the thread in the Codex app |
 | Codex CLI | ✓ | best effort (process + activity) | brings its tab forward; reopens with `codex resume` |
+| Gemini CLI (0.39+, older `.json` sessions too) | ✓ | working / done from its log + process | brings its tab forward; reopens with `gemini --resume` |
+| Qwen Code | ✓ | working / done from its log + process | brings its tab forward; reopens with `qwen --resume` |
 
 \* Codex doesn't log approval requests, so ttyl treats a tool call that's been waiting 20+
-seconds under an approval policy as "probably waiting for approval".
+seconds under an approval policy as "probably waiting for approval". Gemini CLI and Qwen Code
+don't log them either; a session waiting for approval shows as finished (it still rings).
+
+Gemini CLI and Qwen Code support is built from their source code's session format and tested
+against records shaped like it; if something looks off with a real session, please open an issue.
 
 **Collisions:** two or more sessions (at least one still open) that edited the same file in the
 last hour. Paths are compared after resolving each agent's relative paths against its working
@@ -177,7 +184,7 @@ Python does.
 
 - `ttyl new claude "fix the holdout test"`: start a session with its goal attached
 - Answer a permission prompt from the menu bar without switching tabs
-- More agents: Gemini CLI, OpenCode, Cursor's CLI, Aider
+- More agents: OpenCode, Cursor's CLI, Aider
 
 ## Development
 

@@ -24,6 +24,10 @@ from . import collide
 from . import procs as proclib
 from .claude import ClaudeParser
 from .codex import CodexParser, load_threads, load_titles
+from .gemini import GeminiParser
+from .qwen import QwenParser
+
+PARSERS = {"claude": ClaudeParser, "codex": CodexParser, "gemini": GeminiParser, "qwen": QwenParser}
 from .model import STATUS_RANK, Commit, Session, Status
 from .state import State
 
@@ -37,6 +41,8 @@ class Paths:
     codex_sessions: Path = HOME / ".codex" / "sessions"
     codex_index: Path = HOME / ".codex" / "session_index.jsonl"
     codex_home: Path = HOME / ".codex"
+    gemini_home: Path = HOME / ".gemini"
+    qwen_home: Path = HOME / ".qwen"
 
 
 APPROVAL_GUESS = timedelta(seconds=20)  # a Codex tool call pending this long is probably waiting on you
@@ -58,16 +64,14 @@ class Live:
 class _Tail:
     """A transcript being followed: parser state plus how far we've read."""
 
-    def __init__(self, path: Path, agent: str):
-        self.path, self.agent = path, agent
+    def __init__(self, path: Path, agent: str, cwd: str = ""):
+        self.path, self.agent, self.cwd = path, agent, cwd
         self._reset()
 
     def _reset(self) -> None:
-        self.session = Session(agent=self.agent, id=self.path.stem, path=self.path)
-        if self.agent == "claude":
-            self.parser = ClaudeParser(self.session)
-        else:
-            self.parser = CodexParser(self.session)
+        self.session = Session(agent=self.agent, id=self.path.stem, path=self.path, cwd=self.cwd,
+                               entrypoint="cli" if self.agent in ("gemini", "qwen") else "")
+        self.parser = PARSERS[self.agent](self.session)
         self.offset, self.stamp = 0, None
 
     def pump(self) -> bool:
@@ -78,6 +82,15 @@ class _Tail:
         stamp = (st.st_size, st.st_mtime_ns)
         if stamp == self.stamp:
             return False
+        if self.path.suffix == ".json":  # a whole-file JSON session (Gemini < 0.39): reread it
+            self._reset()
+            try:
+                self.parser.feed({"$legacy": json.loads(self.path.read_bytes())})
+            except (OSError, ValueError):
+                pass
+            self._flush()
+            self.stamp = stamp
+            return True
         if st.st_size < self.offset:  # rewritten, start over
             self._reset()
         with open(self.path, "rb") as fh:
@@ -95,8 +108,14 @@ class _Tail:
                 if isinstance(event, dict):
                     self.parser.feed(event)
             self.offset += end + 1
+        self._flush()
         self.stamp = stamp
         return True
+
+    def _flush(self) -> None:
+        flush = getattr(self.parser, "flush", None)  # parsers that rebuild instead of append (Gemini)
+        if flush:
+            flush()
 
 
 @dataclass
@@ -158,12 +177,18 @@ class Store:
         for path in self.paths.codex_sessions.glob("*/*/*/*.jsonl"):
             if self.show_all or str(path) in remembered_paths or _mtime(path) >= cutoff:
                 wanted.append((path, "codex"))
+        for path, cwd in self._gemini_files():
+            if self.show_all or str(path) in remembered_paths or _mtime(path) >= cutoff:
+                wanted.append((path, "gemini", cwd))
+        for path in self.paths.qwen_home.glob("projects/*/chats/*.jsonl"):
+            if self.show_all or str(path) in remembered_paths or _mtime(path) >= cutoff:
+                wanted.append((path, "qwen"))
 
         sessions: list[Session] = []
-        for path, agent in wanted:
+        for path, agent, *cwd in wanted:
             tail = self._tails.get(path)
             if tail is None:
-                tail = self._tails[path] = _Tail(path, agent)
+                tail = self._tails[path] = _Tail(path, agent, *cwd)
             tail.pump()
             if tail.session.imported:
                 continue
@@ -198,6 +223,8 @@ class Store:
                 s.approval_mode = s.approval_mode or info["approval_mode"]
                 s.archived = info["archived"]
         self._codex_live(procs, [s for s in sessions if s.agent == "codex"])
+        for agent in ("gemini", "qwen"):
+            self._cli_live(procs, [s for s in sessions if s.agent == agent], agent)
         for s in sessions:
             self._attach_commits(s)
         self._remember(sessions, procs, now)
@@ -360,6 +387,59 @@ class Store:
                 s.status, s.waiting_for = Status.WAITING, "approval (probably)"
             if s.status == Status.IDLE and s.last_turn:
                 s.last_turn.done = True
+
+    def _cli_live(self, procs: dict[int, proclib.Proc], sessions: list[Session], agent: str) -> None:
+        """Terminal agents with no registry: the newest session in a process's cwd belongs to it."""
+        if not sessions:
+            return
+        by_cwd: dict[str, proclib.Proc] = {}
+        seen_ttys: set[str] = set()
+        for p in procs.values():
+            if not proclib.is_agent_cli(p, agent) or p.tty in seen_ttys:
+                continue  # (gemini relaunches itself: parent and child share a tty)
+            seen_ttys.add(p.tty)
+            if p.pid not in self._codex_cwds:
+                self._codex_cwds[p.pid] = proclib.cwd_of(p.pid)
+            if self._codex_cwds[p.pid]:
+                by_cwd[self._codex_cwds[p.pid]] = p
+        now = datetime.now(timezone.utc)
+        claimed: set[int] = set()
+        for s in sorted(sessions, key=lambda s: s.updated or now, reverse=True):
+            fresh = s.updated is not None and now - s.updated < timedelta(minutes=10)
+            working = bool(s.last_turn and not s.last_turn.done and fresh)
+            proc = by_cwd.get(s.cwd)
+            if proc and proc.pid not in claimed:
+                claimed.add(proc.pid)
+                s.pid, s.tty = proc.pid, proc.tty
+                s.status = Status.BUSY if working else Status.IDLE
+                if s.last_turn and s.status == Status.IDLE:
+                    s.last_turn.done = True
+            else:
+                self._set_closed(s)
+
+    def _gemini_files(self) -> list[tuple[Path, str]]:
+        """(session file, project dir) for every Gemini CLI project; the dir comes from .project_root."""
+        tmp = self.paths.gemini_home / "tmp"
+        if not tmp.is_dir():
+            return []
+        registry: dict[str, str] = {}
+        try:
+            projects = json.loads((self.paths.gemini_home / "projects.json").read_text()).get("projects") or {}
+            registry = {slug: path for path, slug in projects.items()}
+        except (OSError, ValueError, AttributeError):
+            pass
+        out = []
+        for project in tmp.iterdir():
+            chats = project / "chats"
+            if not chats.is_dir():
+                continue
+            try:
+                root = (project / ".project_root").read_text().strip()
+            except OSError:
+                root = registry.get(project.name, "")
+            for f in list(chats.glob("session-*.jsonl")) + list(chats.glob("session-*.json")):
+                out.append((f, root))
+        return out
 
     def _codex_thread_index(self) -> dict[str, dict]:
         dbs = sorted(self.paths.codex_home.glob("state_*.sqlite"))

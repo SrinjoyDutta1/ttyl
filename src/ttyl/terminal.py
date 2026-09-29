@@ -139,6 +139,8 @@ def resume_command(s: Session) -> str:
     cd = f"cd {shlex.quote(s.cwd)} && " if s.cwd else ""
     if s.agent == "codex":
         return f"{cd}codex resume {s.id}"
+    if s.agent in ("gemini", "qwen"):  # both only look in the current directory's project
+        return f"{cd}{s.agent} --resume {s.id}"
     flags = "".join(" " + shlex.quote(a) for a in s.launch_args)
     return f"{cd}claude --resume {s.id}{flags}"
 
