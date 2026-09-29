@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // Glance, pick, go: grouped by what each session needs from you; click a row to go to it.
@@ -40,9 +41,21 @@ struct MenuLabel: View {
 
 // MARK: panel
 
+/// Reports the height of the session list, so the scroll view can be exactly that tall.
+/// (In a menu bar window a ScrollView has no natural height and collapses to nothing.)
+struct ListHeight: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 struct PanelView: View {
     @EnvironmentObject var engine: Engine
     var scrolls = true  // off for snapshots: ImageRenderer can't draw scroll views
+    @State private var listHeight: CGFloat = 0
+
+    private var maxListHeight: CGFloat {
+        min(640, (NSScreen.main?.visibleFrame.height ?? 800) - 160)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -53,7 +66,12 @@ struct PanelView: View {
                     Text("No agent sessions. Start claude or codex in a terminal.")
                         .foregroundStyle(.secondary).padding(20)
                 } else if scrolls {
-                    ScrollView { SessionList(snap: snap) }.frame(maxHeight: 560)
+                    ScrollView {
+                        SessionList(snap: snap).background(
+                            GeometryReader { g in Color.clear.preference(key: ListHeight.self, value: g.size.height) })
+                    }
+                    .frame(height: min(max(listHeight, 80), maxListHeight))
+                    .onPreferenceChange(ListHeight.self) { listHeight = $0 }
                 } else {
                     SessionList(snap: snap)
                 }

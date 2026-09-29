@@ -22,6 +22,10 @@ enum Main {
             MainActor.assumeIsolated { Snapshotter.render(to: args[i + 1]) }
             return
         }
+        if let i = args.firstIndex(of: "--snapshot-live"), i + 1 < args.count {
+            MainActor.assumeIsolated { Snapshotter.renderLive(to: args[i + 1]) }
+            return
+        }
         TtylBar.main()
     }
 }
@@ -62,6 +66,44 @@ enum Snapshotter {
         }
         do { try png.write(to: URL(fileURLWithPath: path)) } catch { fail("write failed: \(error)") }
         print(path)
+    }
+
+    /// The real panel (scroll view and all) laid out in an offscreen window, the way the
+    /// menu bar shows it. Catches layout bugs the ImageRenderer snapshot can't see.
+    static func renderLive(to path: String) {
+        _ = NSApplication.shared
+        let engine = Engine(snapshot: demoSnapshot())
+        let host = NSHostingView(rootView: PanelView(scrolls: true).environmentObject(engine)
+            .background(Color(red: 0.13, green: 0.13, blue: 0.14)).environment(\.colorScheme, .dark))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 900), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.contentView = host
+        for _ in 0..<6 {  // let the height preference settle
+            host.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        let size = host.fittingSize
+        window.setContentSize(size)
+        host.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { fail("no bitmap") }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { fail("no png") }
+        do { try png.write(to: URL(fileURLWithPath: path)) } catch { fail("write failed: \(error)") }
+        print("\(path) \(Int(size.width))x\(Int(size.height))")
+    }
+
+    static func demoSnapshot() -> Snapshot {
+        let p = Engine.engineProcess(["serve", "--demo", "--once", "--quiet"])
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { fail("couldn't run ttyl: \(error)") }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        let line = data.split(separator: 0x0A).last ?? Data()
+        guard let snap = try? JSONDecoder.ttyl.decode(Snapshot.self, from: Data(line)) else { fail("no snapshot from ttyl") }
+        return snap
     }
 
     static func fail(_ msg: String) -> Never {

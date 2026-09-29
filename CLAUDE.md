@@ -29,7 +29,9 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
 - `gui/`: SwiftUI menu bar app, built by `gui/build.sh` with plain swiftc (SourceKit errors in
   single files are noise; the build compiles them together). It runs the engine directly, not via
   a shell: an interactive login shell hung when launched from the app.
-  `ttyl-bar --snapshot out.png` renders the panel on demo data (menus can't be snapshotted).
+  `ttyl-bar --snapshot out.png` renders the panel on demo data (menus can't be snapshotted);
+  `--snapshot-live` lays out the real panel, scroll view included, in an offscreen window. build.sh
+  runs it and fails if the list collapses (a ScrollView in a MenuBarExtra window has no natural height).
 
 ## UI rule
 Glance, pick, go. Group by what the session needs from the user; urgent lanes get a second

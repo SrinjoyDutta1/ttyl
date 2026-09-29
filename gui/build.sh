@@ -19,6 +19,14 @@ sed "s|__TTYL__|$TTYL|" Info.plist > "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP" >/dev/null 2>&1
 echo "built $APP (engine: ${TTYL:-ttyl on PATH})"
 
+# smoke check: lay the real panel out offscreen; a collapsed session list means a layout bug
+if [[ -n "$TTYL" ]]; then
+  size=$("$APP/Contents/MacOS/ttyl-bar" --snapshot-live build/live.png | awk '{print $2}')
+  height=${size#*x}
+  if (( height < 200 )); then echo "panel layout looks collapsed (${size}); see build/live.png" >&2; exit 1; fi
+  echo "panel lays out at $size (build/live.png)"
+fi
+
 if [[ "${1:-}" == "--install" ]]; then
   mkdir -p ~/Applications
   pkill -x ttyl-bar 2>/dev/null || true
