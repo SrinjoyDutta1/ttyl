@@ -60,6 +60,13 @@ struct PanelView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Header()
+            if let n = engine.notice {
+                Text(n)
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(n.hasPrefix("couldn't") ? Palette.fail.opacity(0.25) : Color.accentColor.opacity(0.22))
+            }
             Divider()
             if let snap = engine.snap {
                 if snap.sessions.isEmpty {
@@ -262,11 +269,7 @@ struct Footer: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if let n = engine.notice {
-                Text(n).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-            } else {
-                Legend()
-            }
+            Legend()
             Spacer()
             if !interactive {
                 Image(systemName: "ellipsis.circle").foregroundStyle(.secondary)

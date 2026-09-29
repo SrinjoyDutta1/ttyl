@@ -73,12 +73,30 @@ end run
 """
 
 
+last_error = ""  # why the last AppleScript call failed, for logs and messages
+
+
 def _osascript(script: str, *args: str) -> str:
+    global last_error
     try:
-        res = subprocess.run(["osascript", "-", *args], input=script, capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.TimeoutExpired):
+        res = subprocess.run(["osascript", "-", *args], input=script, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        last_error = str(e)
         return "error"
-    return res.stdout.strip() or ("error: " + res.stderr.strip() if res.returncode else "")
+    if res.returncode:
+        last_error = res.stderr.strip()
+        return "error: " + last_error
+    return res.stdout.strip()
+
+
+def can_control_terminal() -> tuple[bool, str]:
+    """Ask Terminal something harmless. The first time, macOS asks you to allow it."""
+    out = _osascript('tell application "Terminal" to count windows')
+    if out.startswith("error"):
+        denied = "-1743" in last_error or "not allowed" in last_error.lower()
+        return False, ("not allowed to control Terminal (System Settings > Privacy & Security > Automation)"
+                       if denied else last_error or out)
+    return True, f"{out} Terminal windows"
 
 
 def _apps() -> list[str]:
@@ -88,8 +106,10 @@ def _apps() -> list[str]:
 
 def focus(tty: str) -> bool:
     """Bring the tab running on /dev/<tty> to the front."""
+    global last_error
     if not tty:
         return False
+    last_error = f"no Terminal or iTerm2 tab is on {tty}"
     for app in _apps():
         script = _FOCUS_ITERM if app == "iterm" else _FOCUS_TERMINAL
         if _osascript(script, f"/dev/{tty}") == "ok":

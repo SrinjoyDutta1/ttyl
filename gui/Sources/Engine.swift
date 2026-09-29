@@ -104,7 +104,10 @@ final class Engine: ObservableObject {
         input.write(data + Data([0x0A]))
     }
 
-    func go(_ s: SessionInfo) { go(id: s.id) }
+    func go(_ s: SessionInfo) {
+        Log.write("clicked \(s.project) (\(s.where.isEmpty ? s.status : s.where))")
+        go(id: s.id)
+    }
     func go(id: String) { send(["cmd": "go", "id": id]) }
     func testRing() { send(["cmd": "test_ring"]) }
     func stopRinging(_ s: SessionInfo) { send(["cmd": "ack", "id": s.id]) }
@@ -114,7 +117,7 @@ final class Engine: ObservableObject {
     private func flash(_ text: String) {
         notice = text
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
             if self.notice == text { self.notice = nil }
         }
     }

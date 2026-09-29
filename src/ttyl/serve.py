@@ -27,11 +27,20 @@ from datetime import datetime, timedelta, timezone
 
 from . import render, terminal
 from .model import Session, Status, one_line, plain
-from .ring import Ringer, _play, claim_noise, ring_event
+from .ring import Ringer, _play, claim_noise, ring_event, state_dir
 from .summarize import Summarizer, enabled_by_env, load_key_from_shell
 
 TURNS = 14
 HEARTBEAT = 10.0
+
+
+def log(line: str) -> None:
+    """~/.local/state/ttyl/app.log, shared with the menu bar app."""
+    try:
+        with open(state_dir() / "app.log", "a") as fh:
+            fh.write(f"{datetime.now(timezone.utc):%Y-%m-%dT%H:%M:%SZ} engine: {line}\n")
+    except OSError:
+        pass
 
 
 def _turn(s: Session, t) -> dict:
@@ -128,19 +137,11 @@ class Engine:
         elif name == "go" and s:
             self.ringer.ack(s.id)
             s.ringing = ""
-            demo = getattr(self.store, "demo", False)
-            if s.status == Status.CLOSED:
-                if demo:
-                    self.notices.append(f"demo: would reopen with {terminal.resume_command(s)}")
-                elif not terminal.reopen(s):
-                    self.notices.append(f"couldn't open a terminal for {s.project}")
-            elif s.tty:
-                if demo:
-                    self.notices.append(f"demo: would bring {s.tty} to the front")
-                elif not terminal.focus(s.tty):
-                    self.notices.append(f"couldn't find the tab on {s.tty}")
-            else:
-                self.notices.append(f"{s.project} runs in {render.where(s) or 'no terminal'}")
+            self.notices.append(self._go(s))
+            if not getattr(self.store, "demo", False):
+                log(f"go {s.project} ({s.tty or render.where(s) or s.status.value}): {self.notices[-1]}")
+        elif name == "go" and not getattr(self.store, "demo", False):
+            log(f"go {cmd.get('id')}: no such session")
         elif name == "open_terminal_view":
             terminal.run_in_new_window("ttyl")
         elif name == "test_ring":
@@ -150,6 +151,22 @@ class Engine:
                 self.rings.append(ring_event(top, top.ringing or ("needs you" if top.status == Status.WAITING else "finished")))
             if self.ringer.sound:
                 _play()
+
+    def _go(self, s: Session) -> str:
+        """Bring a session's terminal forward (or reopen it); say what happened."""
+        demo = getattr(self.store, "demo", False)
+        if s.status == Status.CLOSED:
+            if demo:
+                return f"demo: would reopen with {terminal.resume_command(s)}"
+            return f"reopening {s.project} in a new window" if terminal.reopen(s) else \
+                f"couldn't open a terminal: {terminal.last_error}"
+        if s.tty:
+            if demo:
+                return f"demo: would bring {s.tty} to the front"
+            return f"→ {s.tty}" if terminal.focus(s.tty) else f"couldn't go to {s.tty}: {terminal.last_error}"
+        if render.where(s) == "bg":
+            return f"{s.project} is a background Claude session: it has no terminal tab to go to"
+        return f"{s.project} runs in {render.where(s) or 'no terminal'}, nothing to go to"
 
     def _maybe_summarize(self) -> None:
         if self.summarizer is None or self._summarizing:
@@ -178,6 +195,11 @@ def serve(store, interval: float = 2.0, once: bool = False, ring: bool = True, s
     engine = Engine(store, ring=ring, summaries=summaries)
     if ring and not getattr(store, "demo", False):
         claim_noise()  # while the menu bar app runs, it's the one that rings
+    if not once and not getattr(store, "demo", False) and sys.platform == "darwin":
+        def check():  # also makes macOS ask for permission now rather than on your first click
+            ok, detail = terminal.can_control_terminal()
+            log(f"terminal control: {'ok' if ok else 'FAILED'} ({detail})")
+        threading.Thread(target=check, daemon=True).start()
 
     commands: queue.Queue = queue.Queue()
     closed = threading.Event()

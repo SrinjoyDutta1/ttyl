@@ -22,6 +22,8 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>ttyl brings the terminal tab of the session you click to the front, and opens a new window to reopen a closed session.</string>
     <key>TTYLCommand</key>
     <string>__TTYL__</string>
 </dict>
