@@ -1,4 +1,4 @@
-"""Render the TUI (and the menu bar panel, if gui/ is built) on demo data to docs/*.png.
+"""Render the TUI (and the menu bar panel, if `ttyl app` has built it) on demo data to docs/*.png.
 
     .venv/bin/python scripts/screenshot.py
 """
@@ -46,7 +46,7 @@ def to_png(svg: Path) -> None:
 async def main() -> None:
     DOCS.mkdir(exist_ok=True)
     shots = [await shoot("ttyl", (132, 42), []), await shoot("ttyl-closed", (132, 42), ["down"] * 6)]
-    bar = Path(__file__).resolve().parent.parent / "gui" / "build" / "ttyl.app" / "Contents" / "MacOS" / "ttyl-bar"
+    bar = Path.home() / "Library" / "Caches" / "ttyl" / "build" / "ttyl.app" / "Contents" / "MacOS" / "ttyl-bar"
     if bar.exists():  # the menu bar panel, drawn by the app itself
         subprocess.run([str(bar), "--snapshot", str(DOCS / "menubar.png")], check=True, capture_output=True)
         print(DOCS / "menubar.png")

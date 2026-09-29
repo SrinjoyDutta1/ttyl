@@ -25,8 +25,9 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
   one opens it). Only the lock holder (`ringer.pid`,
   the menu bar engine when running) makes noise. Tests must use `Ringer(sound=False, notify=False)`.
 - `serve.py`: `ttyl serve`, JSON snapshot lines out, JSON commands in; the menu bar app's engine.
-  `tests/test_serve.py` checks the JSON keys against `gui/Sources/Model.swift`; change both together.
-- `gui/`: SwiftUI menu bar app, built by `gui/build.sh` with plain swiftc (SourceKit errors in
+  `tests/test_serve.py` checks the JSON keys against `src/ttyl/gui/Sources/Model.swift`; change both together.
+- `gui/` (inside the package, `src/ttyl/gui`, so pipx installs ship it): SwiftUI menu bar app,
+  built by `ttyl app` / `gui/build.sh` into ~/Library/Caches/ttyl/build with plain swiftc (SourceKit errors in
   single files are noise; the build compiles them together). It runs the engine directly, not via
   a shell: an interactive login shell hung when launched from the app.
   `ttyl-bar --snapshot out.png` renders the panel on demo data (menus can't be snapshotted);

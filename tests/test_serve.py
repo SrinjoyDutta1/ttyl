@@ -8,7 +8,7 @@ from pathlib import Path
 from ttyl.demo import DemoStore
 from ttyl.serve import Engine, serve, session_json, snapshot
 
-MODEL_SWIFT = Path(__file__).resolve().parent.parent / "gui" / "Sources" / "Model.swift"
+MODEL_SWIFT = Path(__file__).resolve().parent.parent / "src" / "ttyl" / "gui" / "Sources" / "Model.swift"
 
 
 def test_snapshot_groups_numbers_and_rings():
@@ -72,3 +72,14 @@ def test_rings_are_sent_once_for_the_app_to_notify():
     assert ring["reason"] == "needs you" and ring["what"].startswith("approve")
     assert {_camel(k) for k in ring} == _swift_fields("RingEvent")
     assert engine.tick()["rings"] == []  # delivered once
+
+
+def test_the_mac_app_ships_inside_the_package_and_hashes_like_build_sh():
+    import subprocess
+
+    from ttyl import macapp
+
+    assert (macapp.GUI / "build.sh").exists() and len(list((macapp.GUI / "Sources").glob("*.swift"))) >= 4
+    shell = subprocess.run("cat Sources/*.swift Info.plist | shasum | cut -c1-12", shell=True,
+                           cwd=macapp.GUI, capture_output=True, text=True).stdout.strip()
+    assert macapp.source_hash() == shell

@@ -30,15 +30,28 @@ takes you to the right terminal.
 
 ## Install
 
-Python 3.11+ for the engine, macOS 14+ for the menu bar app.
+One line, on macOS or Linux:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/install.sh | bash
+```
+
+Or, if you already use pipx or uv (needs Python 3.11+):
 
 ```sh
 pipx install git+https://github.com/SrinjoyDutta1/ttyl     # or: uv tool install git+…
-ttyl --demo                                                # try it on made-up sessions
-
-# the menu bar app (built with swiftc, no Xcode project needed)
-git clone https://github.com/SrinjoyDutta1/ttyl && ttyl/gui/build.sh --install
 ```
+
+Then pick how you want it. **Both work, at the same time too:**
+
+```sh
+ttyl         # the terminal version
+ttyl app     # the Mac menu bar app (macOS 14+; builds itself the first time, ~20s)
+ttyl --demo  # try either on made-up sessions first
+```
+
+`ttyl app` compiles the app locally with Apple's Command Line Tools
+(`xcode-select --install` if you don't have them); no Xcode project, nothing downloaded.
 
 For summaries, give it an Anthropic API key (from
 [console.anthropic.com](https://console.anthropic.com)). Everything else works without one.
@@ -116,7 +129,7 @@ launch flags, when it was last alive) and its saved summary. That's what keeps a
 terminal on the map, even one that sat idle for weeks, and lets a click bring it back with
 `claude --resume <id>` (or `codex resume <id>`).
 
-The menu bar app is a thin SwiftUI shell (`gui/`) over `ttyl serve`, which streams JSON
+The menu bar app is a thin SwiftUI shell (`src/ttyl/gui`) over `ttyl serve`, which streams JSON
 snapshots and takes commands on stdin. The same engine drives the terminal view.
 
 ### Summaries and privacy
@@ -152,7 +165,7 @@ Python does.
 git clone https://github.com/SrinjoyDutta1/ttyl && cd ttyl
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/pytest -q
-gui/build.sh                              # menu bar app -> gui/build/ttyl.app
+ttyl app --rebuild                        # rebuild the menu bar app from src/ttyl/gui
 .venv/bin/python scripts/screenshot.py    # regenerate docs/*.png from demo data
 ```
 

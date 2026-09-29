@@ -1,6 +1,7 @@
 """ttyl: a map of your agent terminals.
 
-  ttyl                 live map (TUI)
+  ttyl                 live map in your terminal
+  ttyl app             the macOS menu bar app (builds it the first time)
   ttyl ls              print the map once
   ttyl show <which>    one session: recap + turn timeline
   ttyl jump <which>    focus the terminal tab that session runs in
@@ -55,10 +56,19 @@ def main(argv: list[str] | None = None) -> int:
     resume.add_argument("which")
     summ = sub.add_parser("summarize", parents=[common], help="write AI summaries now (one session, or all that need one)")
     summ.add_argument("which", nargs="?")
+    app = sub.add_parser("app", help="open the macOS menu bar app (builds and installs it the first time)")
+    app.add_argument("--rebuild", action="store_true", help="build it again even if it's up to date")
+    app.add_argument("--stop", action="store_true", help="quit the menu bar app")
+    app.add_argument("--dry-run", action="store_true", help="just say whether it would build or open")
     srv = sub.add_parser("serve", parents=[common], help="stream JSON snapshots for the menu bar app")
     srv.add_argument("--once", action="store_true", help="print one snapshot and exit")
     srv.add_argument("--interval", type=float, default=2.0)
     args = ap.parse_args(argv)
+
+    if args.cmd == "app":
+        from .macapp import main as app_main
+
+        return app_main(rebuild=args.rebuild, stop=args.stop, dry_run=args.dry_run)
 
     if args.cmd == "serve":
         from .serve import serve
