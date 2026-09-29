@@ -61,7 +61,9 @@ def test_live_registry_joins_transcripts(home):
 
     assert find(sessions, "5") is by_id["aaa"]
     assert find(sessions, "ttys007") is by_id["bbb"]
-    assert find(sessions, "bb") is by_id["bbb"]
+    assert find(sessions, "fres") is by_id["fresh"]  # id prefix, 4+ chars
+    assert find(sessions, "bbb") is None  # too short to be an id prefix
+    assert find(sessions, "ttys009") is by_id["fresh"]
 
 
 def test_pid_reuse_is_not_a_live_agent(home):

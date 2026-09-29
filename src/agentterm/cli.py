@@ -5,6 +5,7 @@
   agt show <which>    one session: recap + turn timeline
   agt jump <which>    focus the terminal tab that session runs in
   agt resume <which>  reopen a closed session in a new terminal window
+  agt summarize [which]  write (or refresh) AI summaries now
   agt --demo          try it on made-up sessions
 
 <which> is an id prefix, a tty (ttys005 or 5), a pid, a project name or part of a title.
@@ -19,6 +20,7 @@ from rich.console import Console
 
 from . import render, terminal
 from .model import Status
+from .state import State
 from .store import Store, find
 
 
@@ -27,7 +29,7 @@ def _store(args):
         from .demo import DemoStore
 
         return DemoStore()
-    store = Store(days=args.days)
+    store = Store(days=args.days, state=State())
     store.show_all = args.all
     return store
 
@@ -37,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     common.add_argument("-a", "--all", action="store_true", help="include every session ever, not just recent + live")
     common.add_argument("--days", type=float, default=3.0, help="recent window for closed sessions (default 3)")
     common.add_argument("--demo", action="store_true", help="show made-up sessions instead of yours")
+    common.add_argument("--no-summaries", action="store_true", help="don't send session excerpts to Claude for summaries")
 
     ap = argparse.ArgumentParser(prog="agt", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, parents=[common])
     sub = ap.add_subparsers(dest="cmd")
@@ -48,16 +51,21 @@ def main(argv: list[str] | None = None) -> int:
     jump.add_argument("which")
     resume = sub.add_parser("resume", parents=[common], help="reopen a closed session in a new window")
     resume.add_argument("which")
+    summ = sub.add_parser("summarize", parents=[common], help="write AI summaries now (one session, or all that need one)")
+    summ.add_argument("which", nargs="?")
     args = ap.parse_args(argv)
 
     if args.cmd is None:
         from .tui import run
 
-        run(_store(args))
+        run(_store(args), summaries=not args.no_summaries)
         return 0
 
     console = Console(highlight=False)
     sessions = _store(args).refresh()
+
+    if args.cmd == "summarize":
+        return _summarize(console, sessions, args)
 
     if args.cmd == "ls":
         console.print(render.header(sessions))
@@ -92,6 +100,40 @@ def main(argv: list[str] | None = None) -> int:
             console.print(f"{s.project} is still open on {render.where(s) or '?'}; jumping there instead")
             return 0 if s.tty and terminal.focus(s.tty) else 1
         return 0 if terminal.reopen(s) else 1
+    return 0
+
+
+def _summarize(console: Console, sessions, args) -> int:
+    from datetime import datetime, timedelta, timezone
+
+    from .summarize import Summarizer
+
+    if args.demo or args.no_summaries:
+        console.print("summaries are off in this mode")
+        return 1
+    store_state = State()
+    summarizer = Summarizer(store_state)
+    if args.which:
+        s = find(sessions, args.which)
+        if s is None:
+            console.print(f"[red]no session matches[/] {args.which!r}")
+            return 1
+        targets = [s]
+    else:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=args.days)
+        targets = [s for s in render.ordered(sessions) if summarizer.needs(s)
+                   and (s.status != Status.CLOSED or (s.last_active and s.last_active >= cutoff))]
+        if not targets:
+            console.print("every session's summary is up to date")
+            return 0
+    for s in targets:
+        console.print(f"[bold]{s.title}[/]  [grey50]{render.place(s)}[/]")
+        text = summarizer.summarize(s)
+        if not summarizer.enabled:
+            console.print(f"[red]summaries are off:[/] {summarizer.disabled_reason}")
+            console.print("Set ANTHROPIC_API_KEY (from console.anthropic.com), then run this again.")
+            return 1
+        console.print(f"  {text}" if text else "  [grey50](skipped: rate limited or declined; try again later)[/]")
     return 0
 
 

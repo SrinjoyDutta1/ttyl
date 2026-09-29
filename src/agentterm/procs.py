@@ -55,3 +55,27 @@ def is_codex_cli(p: Proc) -> bool:
         return False
     tokens = p.command.split()
     return any(os.path.basename(t) == "codex" for t in tokens[:2])
+
+
+# Flags worth carrying over when a closed Claude Code session is reopened:
+# name -> how many values follow it
+CLAUDE_KEEP = {"--dangerously-skip-permissions": 0, "--model": 1, "--permission-mode": 1, "--add-dir": 1}
+
+
+def launch_args(command: str) -> list[str]:
+    """`claude --model opus --resume x fix it` -> ["--model", "opus"]: the flags to reopen with."""
+    tokens = command.split()[1:]
+    out: list[str] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        name = tok.split("=", 1)[0]
+        if name in CLAUDE_KEEP:
+            if "=" in tok or CLAUDE_KEEP[name] == 0:
+                out.append(tok)
+            elif i + 1 < len(tokens):
+                out += [tok, tokens[i + 1]]
+                i += 1
+        i += 1
+    return out
+

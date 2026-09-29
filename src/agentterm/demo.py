@@ -15,7 +15,7 @@ HOME = "/Users/you/code"
 
 
 def _session(agent, project, branch, title, status, tty, turns, *, updated, reply="", recap="", recap_ago=None,
-             waiting_for="", pid=None) -> Session:
+             waiting_for="", pid=None, summary="", closed=None, args=()) -> Session:
     now = datetime.now(timezone.utc)
     s = Session(agent=agent, id=f"demo-{project}-{title[:12]}".replace(" ", "-").lower(), cwd=f"{HOME}/{project}",
                 branch=branch, ai_title=title, status=status, tty=tty, pid=pid, waiting_for=waiting_for,
@@ -30,6 +30,11 @@ def _session(agent, project, branch, title, status, tty, turns, *, updated, repl
     if recap:
         s.away_summary = recap
         s.away_at = now - timedelta(minutes=recap_ago if recap_ago is not None else updated)
+    if summary:
+        s.summary, s.summary_turns, s.summary_at = summary, len(s.visible_turns), now - timedelta(minutes=updated)
+    if closed is not None:
+        s.closed_at = now - timedelta(minutes=closed)
+    s.launch_args = list(args)
     return s
 
 
@@ -65,7 +70,7 @@ def sessions() -> list[Session]:
             ("commit this", "commit", ["src/limits.py"], ("a3f9c21", "limits: per-tenant token buckets in redis")),
             ("add tests for the fail-open path", "edit", ["tests/test_limits.py"]),
             ("ok push it and open a PR", "active", "$ git push -u origin feat/rate-limits"),
-        ], updated=3, waiting_for="permission prompt", pid=41822,
+        ], summary="Adding per-tenant rate limiting to the gateway, backed by Redis. It built the token buckets, made them fail open when Redis is down, load-tested them, committed a3f9c21 and added tests for the fail-open path. It is waiting for you to approve pushing feat/rate-limits so it can open the PR.", updated=3, waiting_for="permission prompt", pid=41822,
             recap="Per-tenant rate limiting is built and committed, and the fail-open path has tests. "
                   "Next: push feat/rate-limits and open the PR, waiting on your OK to push."),
         _session("claude", "web-dashboard", "main", "Fix the flaky checkout e2e test", Status.BUSY, "ttys002", [
@@ -74,7 +79,7 @@ def sessions() -> list[Session]:
             ("so it's a race with the price fetch?", "chat"),
             ("fix it properly, no sleeps", "edit", ["e2e/checkout.spec.ts", "src/Checkout.tsx"]),
             ("run it 50 times", "active", "$ npx playwright test checkout --repeat-each 50"),
-        ], updated=0, pid=41907, reply="Found it: the Pay button renders before the price request resolves. "
+        ], summary="Tracking down why the checkout e2e test fails about one run in five. The cause was a race: the Pay button rendered before the price request resolved, so it now waits on the price query. It is running the test 50 times to prove the flake is gone.", updated=0, pid=41907, reply="Found it: the Pay button renders before the price request resolves. "
                                        "I made the button wait on the price query instead of a timeout."),
         _session("codex", "ml-pipeline", "exp/lora", "Sweep LoRA ranks on the eval set", Status.BUSY, "ttys007", [
             ("set up a sweep over lora ranks 4, 8, 16, 32", "edit", ["sweep.py", "configs/lora.yaml"]),
@@ -88,13 +93,13 @@ def sessions() -> list[Session]:
             ("commit", "commit", ["app/Settings.tsx"], ("7c1e0b4", "settings: dark mode toggle, persisted")),
             ("add a snapshot test for both themes", "edit", ["app/__tests__/Settings.test.tsx"]),
             ("commit that too", "commit", ["app/__tests__/Settings.test.tsx"], ("91d2f3a", "tests: snapshot settings in both themes")),
-        ], updated=25, pid=40115, reply="Both commits are on main. The snapshot test covers light and dark and passes."),
+        ], summary="Dark mode for the settings screen is done: the toggle persists across restarts (7c1e0b4) and a snapshot test covers both themes (91d2f3a). Both commits are on main; nothing is left unless you want dark mode elsewhere.", updated=25, pid=40115, reply="Both commits are on main. The snapshot test covers light and dark and passes."),
         _session("claude", "infra", "main", "Move the logs bucket to us-east-2", Status.IDLE, "ttys001", [
             ("plan moving the logs bucket to us-east-2", "run"),
             ("why does it want to destroy the bucket?", "chat"),
             ("use a moved block instead", "edit", ["logs.tf"]),
             ("plan again", "run"),
-        ], updated=60 * 72, pid=38801, reply="The plan is clean now: 0 to destroy, 1 to change.\n"
+        ], summary="Moving the logs bucket to us-east-2 without destroying it. It replaced the destroy-and-recreate plan with a moved block in logs.tf, and the plan is now clean (0 to destroy). Next step is yours: terraform apply -target=module.logs.", updated=60 * 72, pid=38801, reply="The plan is clean now: 0 to destroy, 1 to change.\n"
                                             "Apply it when you're ready: terraform apply -target=module.logs"),
         _session("codex", "docs-site", "main", "Rewrite the quickstart", Status.IDLE, "ttys006", [
             ("the quickstart is too long, what would you cut?", "chat"),
@@ -108,13 +113,13 @@ def sessions() -> list[Session]:
             ("so it's a seq scan on requests?", "chat"),
             ("add the index", "edit", ["migrations/0042_requests_tenant_idx.sql"]),
             ("commit", "commit", ["migrations/0042_requests_tenant_idx.sql"], ("4be2a77", "db: index requests(tenant_id, created_at)")),
-        ], updated=130, reply="Committed. p99 should drop back to about 80ms once the migration runs."),
+        ], summary="Investigated the 14:00 p99 spike on /v1/requests: a sequential scan on the requests table. It added an index on (tenant_id, created_at) and committed the migration (4be2a77); p99 should drop to about 80ms once it runs.", closed=95, args=("--model", "opus"), updated=130, reply="Committed. p99 should drop back to about 80ms once the migration runs."),
         _session("codex", "dotfiles", "main", "Speed up zsh startup", Status.CLOSED, "", [
             ("zsh takes 2s to start, profile it", "run"),
             ("lazy-load nvm", "edit", [".zshrc"]),
             ("what else is slow?", "chat"),
             ("drop the unused plugins", "edit", [".zshrc"]),
-        ], updated=60 * 26, reply="Startup is 180ms now, down from 2.1s."),
+        ], closed=60 * 25, updated=60 * 26, reply="Startup is 180ms now, down from 2.1s."),
     ]
     out.sort(key=_sort_key)
     return out

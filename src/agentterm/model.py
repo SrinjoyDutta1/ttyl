@@ -102,6 +102,18 @@ class Session:
     tty: str = ""  # "ttys005", "" when none
     live_name: str = ""
 
+    # remembered across runs (state.py)
+    closed_at: datetime | None = None  # last time its process was seen alive
+    launch_args: list[str] = field(default_factory=list)  # flags to reopen it with
+    summary: str = ""  # model-written recap
+    summary_turns: int = 0  # how many turns that recap covers
+    summary_at: datetime | None = None
+
+    @property
+    def last_active(self) -> datetime | None:
+        times = [t for t in (self.updated, self.closed_at) if t]
+        return max(times) if times else None
+
     @property
     def visible_turns(self) -> list[Turn]:
         # slash commands like /model or /clear that the agent never answered are noise

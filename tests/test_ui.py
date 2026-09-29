@@ -125,3 +125,41 @@ async def test_tui_runs_on_demo_data():
         await app.workers.wait_for_complete()
         await pilot.pause()
         assert len(app.order) == 8 and app.order[0].status == Status.WAITING
+
+
+async def test_enter_on_a_closed_session_reopens_it_once(monkeypatch):
+    from agentterm import terminal
+
+    calls = []
+    monkeypatch.setattr(terminal, "reopen", lambda s: calls.append(s.id) or True)
+    closed = session("c", many_turns(2), status=Status.CLOSED, tty="")
+    live = session("l", many_turns(2), status=Status.IDLE, tty="ttys001")
+
+    class Store(FakeStore):
+        demo = False
+
+    store = Store([live, closed])
+    app = AgentTermApp(store, interval=60, summaries=False)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("2")  # lane 2 is the closed one
+        await app.workers.wait_for_complete()
+        await pilot.press("enter")  # impatient second press
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert calls == ["c"]
+        assert any("already reopening" in n.message for n in app._notifications)
+
+
+async def test_toast_when_a_terminal_closes():
+    s = session("a", many_turns(2), status=Status.IDLE, tty="ttys001")
+    store = FakeStore([s])
+    app = AgentTermApp(store, interval=60)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await app.workers.wait_for_complete()
+        s.status, s.tty = Status.CLOSED, ""
+        app.action_refresh()
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert any("terminal closed" in (n.title or "") for n in app._notifications)

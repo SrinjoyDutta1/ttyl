@@ -22,6 +22,7 @@ from . import procs as proclib
 from .claude import ClaudeParser
 from .codex import CodexParser, load_titles
 from .model import STATUS_RANK, Commit, Session, Status
+from .state import State
 
 HOME = Path.home()
 
@@ -117,9 +118,10 @@ class _GitCache:
 
 
 class Store:
-    def __init__(self, paths: Paths | None = None, days: float = 3.0):
+    def __init__(self, paths: Paths | None = None, days: float = 3.0, state: State | None = None):
         self.paths = paths or Paths()
         self.days = days
+        self.state = state  # None: remember nothing between runs (tests)
         self.show_all = False
         self._tails: dict[Path, _Tail] = {}
         self._codex_titles: tuple[float, dict[str, str]] = (-1.0, {})
@@ -134,14 +136,18 @@ class Store:
         cutoff = now - self.days * 86400
         procs = proclib.snapshot()
         live = self._claude_live(procs)
+        # sessions seen alive recently stay on the map after their terminal closes,
+        # however long ago their transcript was last written
+        remembered = self.state.recently_live(cutoff) if self.state else {}
+        remembered_paths = {rec.get("path") for rec in remembered.values()}
 
         claude_files = {p.stem: p for p in self.paths.claude_projects.glob("*/*.jsonl")}
         wanted: list[tuple[Path, str]] = []
         for sid, path in claude_files.items():
-            if sid in live or self.show_all or _mtime(path) >= cutoff:
+            if sid in live or sid in remembered or self.show_all or _mtime(path) >= cutoff:
                 wanted.append((path, "claude"))
         for path in self.paths.codex_sessions.glob("*/*/*/*.jsonl"):
-            if self.show_all or _mtime(path) >= cutoff:
+            if self.show_all or str(path) in remembered_paths or _mtime(path) >= cutoff:
                 wanted.append((path, "codex"))
 
         sessions: list[Session] = []
@@ -175,10 +181,31 @@ class Store:
             if s.agent == "codex" and s.id in titles:
                 s.ai_title = titles[s.id]
             self._attach_commits(s)
+        self._remember(sessions, procs, now)
 
         keep = [s for s in sessions if s.status != Status.CLOSED or s.visible_turns]
         keep.sort(key=_sort_key)
         return keep
+
+    def _remember(self, sessions: list[Session], procs: dict[int, proclib.Proc], now: float) -> None:
+        """Record live sessions; give closed ones back what was recorded about them."""
+        if self.state is None:
+            return
+        for s in sessions:
+            if s.status != Status.CLOSED and s.pid:
+                proc = procs.get(s.pid)
+                s.launch_args = proclib.launch_args(proc.command) if proc and s.agent == "claude" else []
+                s.closed_at = None
+                self.state.seen_live(s, s.launch_args, now)
+            rec = self.state.get(s.id)
+            if s.status == Status.CLOSED and rec.get("last_live"):
+                s.closed_at = datetime.fromtimestamp(rec["last_live"], tz=timezone.utc)
+                s.launch_args = list(rec.get("args") or [])
+            summary = rec.get("summary") or {}
+            if summary.get("text") and summary.get("turns", 0) >= s.summary_turns:
+                s.summary, s.summary_turns = summary["text"], summary.get("turns", 0)
+                s.summary_at = datetime.fromtimestamp(summary.get("at", now), tz=timezone.utc)
+        self.state.save()
 
     # -- live state -----------------------------------------------------------
 
@@ -291,22 +318,23 @@ def _mtime(path: Path) -> float:
 
 
 def _sort_key(s: Session):
-    ts = s.updated.timestamp() if s.updated else 0
+    ts = s.last_active.timestamp() if s.last_active else 0
     return (STATUS_RANK[s.status], -ts)
 
 
 def find(sessions: list[Session], query: str) -> Session | None:
-    """Match an id prefix, a tty (`ttys005` or `5`), a pid, or a project name."""
+    """Match a tty (`ttys005` or `5`), a pid, an id prefix (4+ chars), a project name, or part of a title."""
     q = query.strip().lower()
     if not q:
         return None
-    for s in sessions:
-        if s.id.lower().startswith(q):
-            return s
     tty = q if q.startswith("tty") else f"ttys{int(q):03d}" if q.isdigit() and len(q) <= 3 else None
     for s in sessions:
         if tty and s.tty == tty or q.isdigit() and s.pid == int(q):
             return s
+    if len(q) >= 4:
+        for s in sessions:
+            if s.id.lower().startswith(q):
+                return s
     for s in sessions:  # sessions come most-urgent-first, so this picks the live one
         if s.project.lower() == q:
             return s
@@ -318,4 +346,4 @@ def find(sessions: list[Session], query: str) -> Session | None:
 
 def default_store() -> Store:
     days = float(os.environ.get("AGT_DAYS", "3"))
-    return Store(days=days)
+    return Store(days=days, state=State())

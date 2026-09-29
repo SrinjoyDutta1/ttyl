@@ -45,7 +45,7 @@ def to_png(svg: Path) -> None:
 
 async def main() -> None:
     DOCS.mkdir(exist_ok=True)
-    shots = [await shoot("agt", (132, 42), []), await shoot("agt-finished", (132, 42), ["4"])]
+    shots = [await shoot("agt", (132, 42), []), await shoot("agt-closed", (132, 42), ["down"] * 6)]
     for svg in shots:
         to_png(svg)
         print(svg.with_suffix(".png") if svg.with_suffix(".png").exists() else svg)

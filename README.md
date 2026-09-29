@@ -17,10 +17,11 @@ was even for.
   ("approve `git push -u origin feat/rate-limits`").
 - **A square per turn**, like a commit graph for the conversation, so you can see a
   session's shape at a glance: edits, commits, failures, chat.
-- **Where it left off:** the agent's own recap, your last ask, the last commit, the files it
-  touched.
+- **A summary of every session**, written by Claude and saved, so "what was this one
+  doing?" has a three-sentence answer: the goal, what's done, and what it's waiting on.
 - **Go there:** press `1`–`9` or `⏎` and the right Terminal / iTerm2 tab comes to the front.
-  Closed sessions reopen with `o`.
+- **Closed a tab by accident?** It stays on the map. Press `⏎` and it reopens in a new
+  window, in the right folder, with the flags it was started with, right where it left off.
 - **Zero setup:** no hooks, no wrappers, no daemon. Sessions you started before installing
   it show up too.
 
@@ -40,6 +41,13 @@ Try it on made-up sessions first:
 agt --demo
 ```
 
+For AI summaries, give it an Anthropic API key (from
+[console.anthropic.com](https://console.anthropic.com)). Everything else works without one.
+
+```sh
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
 ## Use
 
 ```sh
@@ -47,7 +55,8 @@ agt                  # the live map (refreshes every 2s)
 agt ls               # print it once
 agt show 5           # recap + full timeline for the session on ttys005
 agt jump api         # bring the tab for project "api…" to the front
-agt resume 3f2a      # reopen a closed session (by id prefix) in a new window
+agt resume 3f2a9c   # reopen a closed session (by id prefix) in a new window
+agt summarize        # write or refresh summaries now (the live map does this in the background)
 agt -a               # include all history, not just the last 3 days + everything open
 ```
 
@@ -56,17 +65,17 @@ the title.
 
 | key | does |
 |---|---|
-| `1`–`9` | go straight to that session's terminal |
-| `↑` `↓` then `⏎` | pick one, go to it |
-| `o` | reopen a closed session in a new window |
+| `1`–`9` | go straight to that session's terminal (or reopen it, if it's closed) |
+| `↑` `↓` then `⏎` | pick one, go to it / reopen it |
 | `a` | toggle recent / all history |
 | `q` | quit |
 
-It also sends a toast (and a bell) when a session starts needing you or finishes a turn.
+It also sends a toast (and a bell) when a session starts needing you, finishes a turn, or
+its terminal closes.
 
 ## Reading the map
 
-![the recap and timeline of a finished session](docs/agt-finished.png)
+![a closed session: its saved summary, and ⏎ to reopen it where it left off](docs/agt-closed.png)
 
 | square | the turn… |
 |---|---|
@@ -82,8 +91,7 @@ It also sends a toast (and a bell) when a session starts needing you or finishes
 
 ## How it works
 
-Everything comes from files your agents already write. Nothing is installed into them, and
-nothing leaves your machine.
+Everything comes from files your agents already write. Nothing is installed into them.
 
 | source | gives |
 |---|---|
@@ -94,6 +102,21 @@ nothing leaves your machine.
 | `git log` | the commits a turn actually made |
 
 Transcripts are tailed by byte offset, so a refresh only reads what's new.
+
+agt keeps its own small record in `~/.local/state/agentterm/state.json`: each session it has
+seen running (folder, launch flags, when it was last alive) and its saved summary. That's
+what keeps a closed terminal on the map, even one that sat idle for weeks, and lets `⏎`
+bring it back with `claude --resume <id>` (or `codex resume <id>`).
+
+### Summaries and privacy
+
+Everything above stays on your machine. Summaries are the one exception: when an
+Anthropic API key is available, agt sends Claude (`claude-opus-5-5`, low effort) a compact
+excerpt of a session (your prompts, the agent's replies, file names, commit subjects) to write
+its summary. It only does this after a session has new turns and isn't mid-turn, one session
+at a time. That includes Codex sessions. Turn it off with `agt --no-summaries` or
+`AGT_SUMMARIES=0`. Without a key, the recap shows the agent's own "while you were away" note
+instead.
 
 ### Support
 
@@ -109,7 +132,6 @@ first use may ask to allow controlling Terminal). The map itself works anywhere 
 ## Roadmap
 
 - `agt new claude "fix the holdout test"`: start a session with its goal attached
-- Recaps for sessions whose agent never wrote one (via a small, cheap model call)
 - Set each terminal tab's title to its session's title
 - More agents (Gemini CLI, Aider, Cursor's CLI)
 

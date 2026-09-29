@@ -12,6 +12,11 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
 - `render.py`: Rich renderables shared by the CLI and the TUI (sections, lanes, recap, timeline).
 - `tui.py`: the Textual app. `cli.py`: entry point. `demo.py`: made-up sessions.
 - `terminal.py`: AppleScript focus/reopen for Terminal.app and iTerm2.
+- `state.py`: `~/.local/state/agentterm/state.json`, sessions seen alive (cwd, launch flags,
+  last_live) and saved summaries. Keeps closed terminals on the map and reopenable.
+- `summarize.py`: model-written summaries via the `anthropic` SDK (`claude-opus-5-5`, effort low,
+  `fallbacks="default"`). Off without credentials; never runs mid-turn; one at a time.
+  Tests use a fake client; never hit the API from tests.
 
 ## UI rule
 Glance, pick, go. Group by what the session needs from the user; urgent lanes get a second

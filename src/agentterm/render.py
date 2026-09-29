@@ -55,7 +55,7 @@ SECTIONS = [
     Section("working", "WORKING", "", "bold cyan", "▶"),
     Section("finished", "FINISHED", "done in the last day, your move", "bold green3", "✓"),
     Section("idle", "OPEN BUT IDLE", "quiet for over a day", "bold grey70", "●"),
-    Section("closed", "CLOSED", "press o to reopen", "bold grey50", "○"),
+    Section("closed", "CLOSED", "⏎ reopens it where it left off", "bold grey50", "○"),
 ]
 _BY_KEY = {s.key: s for s in SECTIONS}
 
@@ -143,11 +143,13 @@ def action(s: Session) -> Text | None:
 
 
 def when(s: Session) -> str:
-    age = ago(s.updated)
+    age = ago(s.last_active if s.status == Status.CLOSED else s.updated)
     if s.status == Status.WAITING:
         return f"waiting {age}" if age != "now" else "waiting"
     if s.status == Status.BUSY:
         return age
+    if s.status == Status.CLOSED and s.closed_at:
+        return f"closed {age} ago" if age != "now" else "just closed"
     return f"{age} ago" if age != "now" else "just now"
 
 
@@ -171,7 +173,7 @@ def place(s: Session) -> str:
 def _right(s: Session) -> Text:
     if s.status in (Status.WAITING, Status.BUSY):
         return Text(where(s), "grey62")
-    age = ago(s.updated)
+    age = ago(s.last_active if s.status == Status.CLOSED else s.updated)
     return Text.assemble((age, "grey50"), ("  " + where(s) if where(s) else "", "grey62"))
 
 
@@ -284,7 +286,7 @@ def _first_lines(text: str, n: int, width: int = 400) -> str:
     return "\n".join([one_line(plain(x), width) for x in text.splitlines() if x.strip()][:n])
 
 
-def recap(s: Session, short_id: bool = True) -> RenderableType:
+def recap(s: Session, short_id: bool = True, hint: str = "") -> RenderableType:
     """Everything needed to pick this session back up, and nothing else."""
     parts: list[RenderableType] = [Text(s.title, "bold")]
     meta = [s.agent, place(s)]
@@ -298,21 +300,35 @@ def recap(s: Session, short_id: bool = True) -> RenderableType:
     status = Text.assemble((f"{sec.icon} {sec.title}", sec.style), "  ")
     act = action(s)
     status.append_text(act if act is not None else Text(when(s), "grey62"))
+    if s.status == Status.CLOSED:
+        status.append_text(Text.assemble("   ", ("⏎", "bold"), (" reopen it", "grey62")))
+    elif s.tty:
+        status.append_text(Text.assemble("   ", ("⏎", "bold"), (f" go to {s.tty}", "grey62")))
     parts.append(status)
     parts.append(Text())
 
     last = s.last_turn
     replied = [t for t in s.visible_turns if t.reply]
-    parts.append(_heading("WHERE IT LEFT OFF"))
-    if s.away_summary:
-        parts.append(Text.assemble((plain(s.away_summary).strip(), ""), (f"  recap, {ago(s.away_at)} ago", "grey42")))
-        stale = last is not None and s.away_at is not None and s.away_at < last.started
-        if stale and replied:
-            parts.append(Text.assemble(("then: ", "grey50"), (_first_lines(replied[-1].reply, 1, 200), "grey70")))
-    elif replied:
-        parts.append(Text(_first_lines(replied[-1].reply, 5)))
+    behind = len(s.visible_turns) - s.summary_turns
+    if s.summary:
+        parts.append(_heading("SUMMARY"))
+        note = f"  written {ago(s.summary_at)} ago" if s.summary_at else ""
+        if behind > 0:
+            note += f", {behind} newer turn{'s' * (behind != 1)} since"
+        parts.append(Text.assemble((s.summary, ""), (note, "grey42")))
     else:
-        parts.append(Text("no reply yet", "grey50"))
+        parts.append(_heading("WHERE IT LEFT OFF"))
+        if s.away_summary:
+            parts.append(Text.assemble((plain(s.away_summary).strip(), ""), (f"  recap, {ago(s.away_at)} ago", "grey42")))
+            stale = last is not None and s.away_at is not None and s.away_at < last.started
+            if stale and replied:
+                parts.append(Text.assemble(("then: ", "grey50"), (_first_lines(replied[-1].reply, 1, 200), "grey70")))
+        elif replied:
+            parts.append(Text(_first_lines(replied[-1].reply, 5)))
+        else:
+            parts.append(Text("no reply yet", "grey50"))
+        if hint:
+            parts.append(Text(hint, "grey42"))
 
     humans = [t for t in s.visible_turns if t.origin == "human"]
     if humans:
@@ -334,13 +350,9 @@ def recap(s: Session, short_id: bool = True) -> RenderableType:
         parts.append(Text())
         parts.extend(tail)
 
-    parts.append(Text())
-    if s.tty:
-        parts.append(Text.assemble(("⏎", "bold"), (f"  go to {s.tty}", "grey62")))
-    elif s.status == Status.CLOSED:
-        parts.append(Text.assemble(("o", "bold"), ("  reopen in a new window", "grey62")))
-        if not short_id:
-            parts.append(Text(resume_command(s), "grey50"))
+    if s.status == Status.CLOSED and not short_id:  # `agt show`: the command to copy
+        parts.append(Text())
+        parts.append(Text.assemble(("reopen with  ", "grey50"), (resume_command(s), "grey70")))
     return Group(*parts)
 
 

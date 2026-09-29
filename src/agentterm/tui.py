@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+from datetime import datetime, timedelta, timezone
+
 from rich.console import Group
 from rich.text import Text
 from textual import work
@@ -14,16 +17,20 @@ from textual.widgets.option_list import Option
 from . import render, terminal
 from .model import Session, Status
 from .store import Store, default_store
+from .summarize import Summarizer, enabled_by_env
+
+REOPEN_GRACE = 45.0  # seconds a reopened session gets to show up before ⏎ may reopen it again
 
 
 class Lanes(OptionList):
-    BINDINGS = [Binding("enter", "select", "go to terminal")]
+    BINDINGS = [Binding("enter", "select", "go / reopen")]
 
 
 def _signature(s: Session) -> tuple:
     last = s.last_turn
     return (render.section_of(s).key, s.id, s.status, s.title, s.branch, s.tty, len(s.visible_turns),
-            last.kind if last else None, last.last_action if last else "", render.when(s), s.waiting_for)
+            last.kind if last else None, last.last_action if last else "", render.when(s), s.waiting_for,
+            s.summary_turns)
 
 
 class AgentTermApp(App):
@@ -47,16 +54,22 @@ class AgentTermApp(App):
     BINDINGS = [
         Binding("1", "go(1)", "go to #", key_display="1-9"),
         *[Binding(str(n), f"go({n})", show=False) for n in range(2, 10)],
-        Binding("o", "reopen", "reopen closed"),
+        Binding("o", "reopen", "reopen", show=False),
         Binding("a", "toggle_all", "show all"),
         Binding("r", "refresh", "refresh", show=False),
         Binding("q", "quit", "quit"),
     ]
 
-    def __init__(self, store: Store | None = None, interval: float = 2.0):
+    def __init__(self, store: Store | None = None, interval: float = 2.0, summarizer: Summarizer | None = None,
+                 summaries: bool = True):
         super().__init__()
         self.store = store or default_store()
         self.interval = interval
+        if summarizer is None and summaries and enabled_by_env() and not getattr(self.store, "demo", False):
+            summarizer = Summarizer(getattr(self.store, "state", None))
+        self.summarizer = summarizer
+        self._summarizing = False
+        self._reopened: dict[str, float] = {}  # session id -> when we asked the terminal to reopen it
         self.sessions: list[Session] = []
         self.order: list[Session] = []  # display order; index + 1 is the lane's number
         self.selected: str | None = None
@@ -94,9 +107,40 @@ class AgentTermApp(App):
         self._announce(sessions)
         self.sessions = sessions
         self._draw()
+        self._summarize_next()
+
+    # -- summaries ------------------------------------------------------------
+
+    def _summarize_next(self) -> None:
+        if self.summarizer is None or self._summarizing:
+            return
+        cutoff = datetime.now(timezone.utc) - timedelta(days=self.store.days)
+        s = self.summarizer.pick(self.order, self.selected, cutoff)
+        if s is not None:
+            self._summarizing = True
+            self._summarize(s)
+
+    @work(thread=True, group="summarize")
+    def _summarize(self, s: Session) -> None:
+        try:
+            self.summarizer.summarize(s)
+        finally:
+            self.call_from_thread(self._summarized)
+
+    def _summarized(self) -> None:
+        self._summarizing = False
+        self._show_detail()
+        self._summarize_next()
+
+    def _summary_hint(self) -> str:
+        if self.summarizer is None or getattr(self.store, "demo", False):
+            return ""
+        if not self.summarizer.enabled:
+            return f"AI summaries are off: {self.summarizer.disabled_reason}"
+        return ""
 
     def _announce(self, sessions: list[Session]) -> None:
-        """Toast when a lane starts needing you or finishes its turn."""
+        """Toast when a lane starts needing you, finishes its turn, or its terminal closes."""
         first = not self._last_status
         for s in sessions:
             before = self._last_status.get(s.id)
@@ -108,6 +152,11 @@ class AgentTermApp(App):
                 self.bell()
             elif before == Status.BUSY and s.status == Status.IDLE:
                 self.notify(f"{s.project}: {s.title}", title="finished")
+            elif before is not None and s.status == Status.CLOSED:
+                self.notify(f"{s.title}\nselect it and press ⏎ to reopen", title=f"{s.project}: terminal closed",
+                            severity="warning")
+            if s.status != Status.CLOSED:
+                self._reopened.pop(s.id, None)  # it's back
 
     def _draw(self) -> None:
         bar = render.header(self.sessions)
@@ -157,7 +206,7 @@ class AgentTermApp(App):
             return
         pane = self.query_one("#timeline", VerticalScroll)
         width = max(30, pane.size.width - 4)
-        body.update(render.recap(s))
+        body.update(render.recap(s, hint=self._summary_hint()))
         turns.update(Group(render.timeline(s, limit=200, width=width), Text(), render.LEGEND))
 
     def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
@@ -189,12 +238,11 @@ class AgentTermApp(App):
         s = self._current()
         if s is None:
             return
+        if s.status == Status.CLOSED:
+            self.action_reopen()
+            return
         if not s.tty:
-            if s.status == Status.CLOSED:
-                hint = "closed. Press o to reopen it in a new window"
-            else:
-                hint = f"runs in {render.where(s) or 'no terminal'}, nothing to jump to"
-            self.notify(hint, title=s.project)
+            self.notify(f"runs in {render.where(s) or 'no terminal'}, nothing to jump to", title=s.project)
             return
         if getattr(self.store, "demo", False):
             self.notify(f"would bring {s.tty} to the front", title=f"demo: {s.project}")
@@ -213,9 +261,14 @@ class AgentTermApp(App):
         if s.status != Status.CLOSED:
             self.action_jump()
             return
+        asked = self._reopened.get(s.id)
+        if asked and time.monotonic() - asked < REOPEN_GRACE:
+            self.notify("already reopening in another window", title=s.project)
+            return
         if getattr(self.store, "demo", False):
             self.notify(terminal.resume_command(s), title="demo: would reopen with")
             return
+        self._reopened[s.id] = time.monotonic()
         self._reopen(s)
 
     @work(thread=True, group="osa")
@@ -229,5 +282,5 @@ class AgentTermApp(App):
         self.action_refresh()
 
 
-def run(store: Store | None = None) -> None:
-    AgentTermApp(store).run()
+def run(store: Store | None = None, summaries: bool = True) -> None:
+    AgentTermApp(store, summaries=summaries).run()

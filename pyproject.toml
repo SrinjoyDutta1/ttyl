@@ -6,7 +6,7 @@ readme = "README.md"
 license = {text = "MIT"}
 authors = [{name = "Srinjoy Dutta"}]
 requires-python = ">=3.11"
-dependencies = ["textual>=8", "rich>=13"]
+dependencies = ["textual>=8", "rich>=13", "anthropic>=1.9"]
 keywords = ["claude-code", "codex", "ai-agents", "terminal", "tui", "textual"]
 classifiers = [
     "Environment :: Console",

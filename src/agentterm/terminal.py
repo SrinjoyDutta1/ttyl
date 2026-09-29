@@ -98,10 +98,12 @@ def focus(tty: str) -> bool:
 
 
 def resume_command(s: Session) -> str:
+    """The command that brings a closed session back, in its folder, with its original flags."""
     cd = f"cd {shlex.quote(s.cwd)} && " if s.cwd else ""
     if s.agent == "codex":
         return f"{cd}codex resume {s.id}"
-    return f"{cd}claude --resume {s.id}"
+    flags = "".join(" " + shlex.quote(a) for a in s.launch_args)
+    return f"{cd}claude --resume {s.id}{flags}"
 
 
 def reopen(s: Session) -> bool:
