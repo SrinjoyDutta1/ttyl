@@ -1,0 +1,37 @@
+[project]
+name = "agentterm"
+version = "0.1.0"
+description = "A map of every coding agent you have running: which terminal needs you, and where each one left off."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Srinjoy Dutta"}]
+requires-python = ">=3.11"
+dependencies = ["textual>=8", "rich>=13"]
+keywords = ["claude-code", "codex", "ai-agents", "terminal", "tui", "textual"]
+classifiers = [
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development",
+]
+
+[project.urls]
+Homepage = "https://github.com/SrinjoyDutta1/agentterm"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[project.scripts]
+agt = "agentterm.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
