@@ -1,0 +1,45 @@
+name: An agent's sessions look wrong
+description: Missing sessions, wrong titles/status/files, or a resume that fails for one agent
+labels: ["agent-format"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Support for most agents is built from their source code, not from real sessions, so a sample of what
+        your agent actually writes is the fastest way to fix it. **Redact anything private** before pasting.
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      options: [Claude Code, Codex CLI, Codex Desktop, Gemini CLI, Qwen Code, GitHub Copilot CLI, OpenCode, Goose, Aider, Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Agent version
+      description: e.g. the output of `gemini --version`, `opencode --version`
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What ttyl showed vs. what actually happened
+      placeholder: "The session shows as finished, but it was still running a command…"
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: A few lines of the session file (redacted)
+      description: |
+        Where it lives: Gemini `~/.gemini/tmp/<project>/chats/session-*.jsonl` · Qwen `~/.qwen/projects/<dir>/chats/*.jsonl` ·
+        Copilot `~/.copilot/session-state/<id>/events.jsonl` · Codex `~/.codex/sessions/…/rollout-*.jsonl` ·
+        Aider `.aider.chat.history.md` in the repo · OpenCode/Goose: describe what you see, or run
+        `sqlite3 ~/.local/share/opencode/opencode.db ".schema session"`. Replace prompts and code with "…".
+      render: json
+  - type: input
+    id: ttyl
+    attributes:
+      label: ttyl version and macOS version
+      placeholder: "ttyl 0.2.0, macOS 26.5"

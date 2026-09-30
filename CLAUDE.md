@@ -3,6 +3,8 @@
 ttyl (talk to you later) watches every Claude Code / Codex session and rings when one needs you.
 
 Dev setup: `python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'`, then `.venv/bin/pytest -q`.
+tests/conftest.py points XDG config/state at temp dirs: tests must never touch the real ones.
+`scripts/test_install.sh [--github]` runs install.sh on a simulated brand-new Mac (empty HOME, OS tools only).
 To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo data with
 `app.run_test()` + `save_screenshot()` and converts to PNG with headless Chrome. Use `--demo`
 (or `DemoStore`) for anything that ends up public: real transcripts are personal.
@@ -23,6 +25,9 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
 - `terminal.py`: AppleScript focus/reopen for Terminal.app and iTerm2.
 - `state.py`: `~/.local/state/ttyl/state.json`, sessions seen alive (cwd, launch flags,
   last_live) and saved summaries. Keeps closed terminals on the map and reopenable.
+- `settings.py`: ~/.config/ttyl/settings.json (kept apart from state.json so the CLI, TUI and menu bar
+  engine can all change it). `summaries` is OFF by default: nothing leaves the machine until the user
+  runs `ttyl summaries on` or flips it in the app; the TUI and engine re-check it every refresh.
 - `summarize.py`: model-written summaries via the `anthropic` SDK (`claude-opus-5-5`, effort low,
   `fallbacks="default"`). Off without credentials; never runs mid-turn; one at a time.
   Tests use a fake client; never hit the API from tests.

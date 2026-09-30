@@ -89,3 +89,35 @@ def test_refusal_is_not_retried_until_the_session_changes():
     s = session(Claude().prompt("x").say("y"))
     assert sm.summarize(s) is None and not s.summary
     assert not sm.needs(s)
+
+
+def test_summaries_are_off_until_you_turn_them_on(monkeypatch):
+    from ttyl import settings
+    from ttyl.summarize import summaries_on
+
+    assert not summaries_on()  # default: nothing is sent anywhere
+    settings.set("summaries", True)
+    assert summaries_on()
+    monkeypatch.setenv("TTYL_SUMMARIES", "0")
+    assert not summaries_on()
+
+
+def test_the_engine_follows_the_setting():
+    from ttyl.serve import Engine
+
+    class Store:
+        show_all = False
+        days = 3
+
+        def refresh(self):
+            return []
+
+    engine = Engine(Store(), ring=False)
+    snap = engine.tick()
+    assert snap["summaries"]["on"] is False and engine.summarizer is None
+    engine.handle({"cmd": "summaries", "on": True})
+    snap = engine.tick()
+    assert snap["summaries"]["on"] is True and engine.summarizer is not None
+    assert "go to Claude" in snap["notices"][0]
+    engine.handle({"cmd": "summaries", "on": False})
+    assert engine.tick()["summaries"]["on"] is False and engine.summarizer is None

@@ -58,8 +58,9 @@ def _camel(key: str) -> str:
 
 def test_json_matches_the_swift_model():
     store = DemoStore()
-    snap = snapshot(store.refresh())
+    snap = Engine(store, ring=False, summaries=False).tick()
     assert {_camel(k) for k in snap if k != "type"} == _swift_fields("Snapshot")
+    assert {_camel(k) for k in snap["summaries"]} == _swift_fields("SummariesInfo")
     assert {_camel(k) for k in snap["sections"][0]} == _swift_fields("SectionInfo")
     assert {_camel(k) for k in snap["sessions"][0]} == _swift_fields("SessionInfo")
     assert {_camel(k) for k in snap["sessions"][0]["turns"][0]} == _swift_fields("TurnInfo")
