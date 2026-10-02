@@ -1,7 +1,15 @@
 # ttyl ☎
 
 **Your coding agents on one screen, and they call you when they need you.**
-Claude Code and Codex, plus Gemini CLI, GitHub Copilot CLI, OpenCode, Goose, Aider and Qwen Code (beta), side by side.
+SUPPORTED BY 
+ - Claude Code
+ - Codex
+ - Gemini CLI
+ - GitHub Copilot CLI
+ - OpenCode
+ - Goose
+ - Aider
+ - Qwen Code (beta)
 
 <img src="docs/menubar.png" alt="the ttyl menu bar panel: sessions grouped by what they need, two of them ringing" width="520">
 
