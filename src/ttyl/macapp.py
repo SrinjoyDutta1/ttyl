@@ -20,6 +20,12 @@ GUI = Path(__file__).resolve().parent / "gui"
 INSTALLED = Path.home() / "Applications" / "ttyl.app"
 
 
+def app_log() -> Path:
+    from .ring import state_dir
+
+    return state_dir() / "app.log"
+
+
 def source_hash() -> str:
     """Same as build.sh: sha1 of the Swift sources then Info.plist, first 12 hex digits."""
     h = hashlib.sha1()

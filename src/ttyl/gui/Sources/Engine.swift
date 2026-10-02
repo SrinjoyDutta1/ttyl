@@ -119,6 +119,8 @@ final class Engine: ObservableObject {
     func setShowAll(_ on: Bool) { send(["cmd": "all", "on": on]) }
     func openTerminalView() { send(["cmd": "open_terminal_view"]) }
 
+    func flashNotice(_ text: String) { flash(text) }
+
     private func flash(_ text: String) {
         notice = text
         Task { @MainActor in

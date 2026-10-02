@@ -2,6 +2,8 @@
 
   ttyl                 live map in your terminal
   ttyl app             the macOS menu bar app (builds it the first time)
+  ttyl doctor          check that everything's set up, and how to fix what isn't
+  ttyl update          upgrade ttyl (and the menu bar app)
   ttyl ls              print the map once
   ttyl show <which>    one session: recap + turn timeline
   ttyl jump <which>    focus the terminal tab that session runs in
@@ -22,6 +24,8 @@ import argparse
 import sys
 
 from rich.console import Console
+
+from . import __version__
 
 from . import render, terminal
 from .model import Status
@@ -48,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     common.add_argument("--quiet", action="store_true", help="no ring sound or notifications (rows still flash)")
 
     ap = argparse.ArgumentParser(prog="ttyl", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter, parents=[common])
+    ap.add_argument("--version", action="version", version=f"ttyl {__version__}")
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("ls", parents=[common], help="print the map once")
     show = sub.add_parser("show", parents=[common], help="recap + timeline for one session")
@@ -68,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     toggle.add_argument("state", nargs="?", choices=["on", "off"])
     summ = sub.add_parser("summarize", parents=[common], help="write AI summaries now (one session, or all that need one)")
     summ.add_argument("which", nargs="?")
+    sub.add_parser("doctor", help="check that everything's set up, and how to fix what isn't")
+    sub.add_parser("update", help="upgrade ttyl (and rebuild the menu bar app)")
     app = sub.add_parser("app", help="open the macOS menu bar app (builds and installs it the first time)")
     app.add_argument("--rebuild", action="store_true", help="build it again even if it's up to date")
     app.add_argument("--stop", action="store_true", help="quit the menu bar app")
@@ -77,6 +84,11 @@ def main(argv: list[str] | None = None) -> int:
     srv.add_argument("--once", action="store_true", help="print one snapshot and exit")
     srv.add_argument("--interval", type=float, default=2.0)
     args = ap.parse_args(argv)
+
+    if args.cmd in ("doctor", "update"):
+        from .doctor import doctor, update
+
+        return doctor() if args.cmd == "doctor" else update()
 
     if args.cmd == "summaries":
         return _summaries(args.state)

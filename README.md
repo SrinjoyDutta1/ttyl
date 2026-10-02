@@ -1,5 +1,7 @@
 # ttyl ☎
 
+[![CI](https://github.com/SrinjoyDutta1/ttyl/actions/workflows/ci.yml/badge.svg)](https://github.com/SrinjoyDutta1/ttyl/actions/workflows/ci.yml)
+
 **Your coding agents on one screen, and they call you when they need you.**
 SUPPORTED BY 
  - Claude Code
@@ -62,6 +64,9 @@ ttyl app     # the Mac menu bar app (macOS 14+; builds itself the first time, ~2
 ttyl --demo  # try either on made-up sessions first
 ```
 
+Something not working? `ttyl doctor` checks every piece (agents found, Terminal permission, the
+app, notifications) and says how to fix what's missing. `ttyl update` upgrades it.
+
 `ttyl app` compiles the app locally with Apple's Command Line Tools
 (`xcode-select --install` if you don't have them); no Xcode project, nothing downloaded.
 
@@ -74,7 +79,7 @@ ttyl summaries on                     # or: menu bar ☎ > ⋯ > AI summaries
 
 ## Use
 
-**Menu bar:** click ☎ for the panel. Click a row to go to that terminal (or reopen it),
+**Menu bar:** click ☎ for the panel (turn on **⋯ → Open at login** so it's there after a restart). Click a row to go to that terminal (or reopen it),
 hover a row for its summary, hover a square for that turn. Hover a row and click the box
 icon to archive it, or right-click a row for Archive / Move to Trash / Copy resume command.
 `⋯` opens the full terminal view, shows all history, or plays a test ring.
@@ -99,6 +104,7 @@ ttyl ls              # print the map once
 ttyl show 5          # summary + full timeline for the session on ttys005
 ttyl jump api        # bring the tab for project "api…" to the front
 ttyl resume 3f2a9c   # reopen a closed session (by id prefix) in a new window
+ttyl doctor          # check the setup; ttyl update to upgrade
 ttyl summaries on    # opt in to AI summaries (off by default; `off` to stop)
 ttyl summarize       # write or refresh summaries now
 ttyl archive 5       # hide a session until it does something new (unarchive undoes)

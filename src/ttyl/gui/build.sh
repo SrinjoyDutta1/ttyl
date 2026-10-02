@@ -34,8 +34,10 @@ fi
 if [[ "${1:-}" == "--install" ]]; then
   mkdir -p ~/Applications
   pkill -x ttyl-bar 2>/dev/null || true
+  for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -x ttyl-bar >/dev/null || break; sleep 0.3; done  # let it quit
   rm -rf ~/Applications/ttyl.app
   cp -R "$APP" ~/Applications/
-  open ~/Applications/ttyl.app
+  # relaunching right after a quit can race LaunchServices (error -600): try again once
+  open ~/Applications/ttyl.app 2>/dev/null || { sleep 1; open ~/Applications/ttyl.app; }
   echo "installed ~/Applications/ttyl.app: look for ☎ in your menu bar"
 fi

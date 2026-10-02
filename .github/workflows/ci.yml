@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest -q
+      - name: The menu bar app builds (and its panel lays out)
+        run: ttyl app --build-only
+      - name: The one-line install works on a brand-new Mac
+        run: scripts/test_install.sh
+
+  linux:
+    # the terminal view works anywhere Python does; 3.11 is the oldest we support
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest -q

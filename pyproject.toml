@@ -1,6 +1,6 @@
 [project]
 name = "ttyl"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Your coding agents on one screen, and they call you (ring ring) when they need you."
 readme = "README.md"
 license = {text = "MIT"}
@@ -31,6 +31,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "ttyl.__version__"}
 
 [tool.setuptools.package-data]
 ttyl = ["gui/Info.plist", "gui/build.sh", "gui/Sources/*.swift"]

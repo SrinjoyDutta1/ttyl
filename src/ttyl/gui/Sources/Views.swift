@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 
 // Glance, pick, go: grouped by what each session needs from you; click a row to go to it.
@@ -83,6 +84,7 @@ struct PanelView: View {
                     .background(n.hasPrefix("couldn't") ? Palette.fail.opacity(0.25) : Color.accentColor.opacity(0.22))
             }
             Divider()
+            if scrolls { Welcome() }
             if let snap = engine.snap {
                 if snap.sessions.isEmpty {
                     Text("No agent sessions. Start claude or codex in a terminal.")
@@ -373,6 +375,56 @@ struct Square: View {
     }
 }
 
+/// Start at login, through the system's login items (System Settings > General > Login Items).
+enum LoginItem {
+    static var isOn: Bool { SMAppService.mainApp.status == .enabled }
+
+    /// Returns a message for the banner.
+    static func set(_ on: Bool) -> String {
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        } catch {
+            Log.write("login item: \(error.localizedDescription)")
+            return "couldn't change Open at login: \(error.localizedDescription)"
+        }
+        if on && SMAppService.mainApp.status == .requiresApproval {
+            SMAppService.openSystemSettingsLoginItems()
+            return "approve ttyl in System Settings > General > Login Items"
+        }
+        return on ? "ttyl will open at login" : "ttyl won't open at login"
+    }
+}
+
+/// Shown once, the first time someone opens the panel.
+struct Welcome: View {
+    @EnvironmentObject var engine: Engine
+    @AppStorage("welcomed") private var welcomed = false
+
+    var body: some View {
+        if !welcomed {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Welcome to ttyl ☎").font(.system(size: 13, weight: .bold))
+                Text("Every coding agent you have running shows up here, grouped by what it needs from you. "
+                     + "When one needs you or finishes, ☎ rings. Click a session to jump to its terminal "
+                     + "(or reopen it). Hover the little squares to see each turn.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Open ttyl at login") {
+                        engine.flashNotice(LoginItem.set(true))
+                        welcomed = true
+                    }
+                    .buttonStyle(.borderedProminent).controlSize(.small)
+                    Button("Got it") { welcomed = true }.controlSize(.small)
+                }
+            }
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor.opacity(0.12)))
+            .padding(.horizontal, 10).padding(.top, 8)
+        }
+    }
+}
+
 struct Footer: View {
     @EnvironmentObject var engine: Engine
     var interactive = true  // menus can't be drawn into snapshots
@@ -389,6 +441,8 @@ struct Footer: View {
                 Button("Test ring") { engine.testRing() }
                 Toggle("Show all history", isOn: Binding(
                     get: { engine.snap?.showAll ?? false }, set: { engine.setShowAll($0) }))
+                Toggle("Open at login", isOn: Binding(
+                    get: { LoginItem.isOn }, set: { engine.flashNotice(LoginItem.set($0)) }))
                 Toggle("AI summaries (sends excerpts to Claude)", isOn: Binding(
                     get: { engine.snap?.summaries.on ?? false }, set: { engine.setSummaries($0) }))
                 Divider()
