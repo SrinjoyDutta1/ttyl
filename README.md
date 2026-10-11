@@ -13,7 +13,9 @@ SUPPORTED BY
  - Aider
  - Qwen Code (beta)
 
-<img src="https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/docs/menubar.png" alt="the ttyl menu bar panel: sessions grouped by what they need, two of them ringing" width="520">
+<a href="https://github.com/SrinjoyDutta1/ttyl/blob/main/docs/demo.mp4"><img src="https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/docs/demo.gif" alt="ttyl demo: an agent stops at a permission prompt, the Mac rings, and one click brings up the right terminal" width="720"></a>
+
+▶ [Watch it with sound](https://github.com/SrinjoyDutta1/ttyl/blob/main/docs/demo.mp4) (21s)
 
 You start Claude Code in one terminal, Codex in another, a third to fix a flaky test, a
 fourth for a quick question... and an hour later you have a wall of tabs and no idea which
@@ -42,6 +44,8 @@ takes you to the right terminal.
 - **Closed a tab by accident?** It stays on the map. Click it and it reopens in a new window,
   in the right folder, with the flags it was started with, right where it left off.
 - **Zero setup:** no hooks, no wrappers. Sessions you started before installing it show up too.
+
+<img src="https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/docs/menubar.png" alt="the ttyl menu bar panel: sessions grouped by what they need, two of them ringing" width="520">
 
 ## Install
 
