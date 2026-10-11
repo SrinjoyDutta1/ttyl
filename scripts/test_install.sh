@@ -18,7 +18,8 @@ run TTYL_REPO="$REPO" TTYL_APP=0 bash install.sh
 
 TTYL="$TMP/home/.local/bin/ttyl"
 echo "== the installed command"
-run "$TTYL" ls --demo | head -4
+run "$TTYL" ls --demo > "$TMP/ls.txt"   # not piped to head: ttyl can exit 1 when the pipe closes early
+head -4 "$TMP/ls.txt"
 run "$TTYL" summaries
 echo "== the package ships the on-device summary helper's source"
 ls "$TMP"/home/.local/share/uv/tools/ttyl/lib/python*/site-packages/ttyl/gui/Helpers/Summarize.swift

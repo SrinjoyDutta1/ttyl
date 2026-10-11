@@ -1,5 +1,6 @@
 """Summaries, with a fake Anthropic client (no network)."""
 
+import os
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -118,7 +119,7 @@ def test_the_engine_follows_the_setting(monkeypatch):
     engine = Engine(Store(), ring=False)
     snap = engine.tick()
     assert snap["summaries"]["mode"] == "local" and snap["summaries"]["using"] == ""  # no helper in tests
-    assert "menu bar app" in snap["summaries"]["note"]
+    assert ("menu bar app" if os.uname().sysname == "Darwin" else "need a Mac") in snap["summaries"]["note"]
     engine.handle({"cmd": "summaries", "mode": "claude"})
     snap = engine.tick()
     assert snap["summaries"] == {"mode": "claude", "using": "claude",
