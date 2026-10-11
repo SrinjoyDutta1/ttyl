@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ttyl: your coding agents call you</title>
+<meta name="description" content="Every Claude Code, Codex, Gemini CLI, Copilot CLI, OpenCode, Goose and Aider session on one screen. When one needs you, your Mac rings.">
+<meta property="og:title" content="ttyl: your coding agents call you when they need you">
+<meta property="og:description" content="Every coding agent session on one screen. When one needs you, your Mac rings, and one click takes you to the right terminal.">
+<meta property="og:image" content="https://srinjoydutta1.github.io/ttyl/demo-poster.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root { --bg: #0f0f14; --fg: #f4f4f6; --dim: #a1a1ad; --pink: #ec4899; --box: #1c1c24; --line: #2e2e3a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 16px 64px; text-align: center; }
+  h1 { font-size: 56px; margin: 0; letter-spacing: -1px; }
+  h1 span { color: var(--pink); }
+  .tag { font-size: 24px; font-weight: 600; margin: 8px 0 4px; }
+  .agents { color: var(--dim); margin: 0 0 28px; }
+  video { width: 100%; border-radius: 12px; border: 1px solid var(--line); background: #000; }
+  pre { display: inline-block; margin: 28px 0 8px; padding: 12px 20px; background: var(--box);
+        border: 1px solid var(--line); border-radius: 10px; font: 18px/1.4 ui-monospace, Menlo, monospace;
+        max-width: 100%; overflow-x: auto; }
+  pre::before { content: "$ "; color: var(--dim); }
+  a { color: var(--fg); }
+  .links { color: var(--dim); }
+  .links a { margin: 0 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1><span>☎</span> ttyl</h1>
+  <p class="tag">Your coding agents call you when they need you.</p>
+  <p class="agents">Claude Code · Codex · Gemini CLI · Copilot CLI · OpenCode · Goose · Aider</p>
+  <video src="demo.mp4" poster="demo-poster.png" controls playsinline preload="metadata"></video>
+  <pre>brew install srinjoydutta1/tap/ttyl</pre>
+  <p class="links"><a href="https://github.com/SrinjoyDutta1/ttyl">GitHub</a> · free and open source (MIT) · macOS, terminal view on Linux too</p>
+</main>
+</body>
+</html>

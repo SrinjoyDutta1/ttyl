@@ -13,9 +13,9 @@ SUPPORTED BY
  - Aider
  - Qwen Code (beta)
 
-<a href="https://github.com/SrinjoyDutta1/ttyl/blob/main/docs/demo.mp4"><img src="https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/docs/demo.gif" alt="ttyl demo: an agent stops at a permission prompt, the Mac rings, and one click brings up the right terminal" width="720"></a>
+<a href="https://srinjoydutta1.github.io/ttyl/"><img src="https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/docs/demo.gif" alt="ttyl demo: an agent stops at a permission prompt, the Mac rings, and one click brings up the right terminal" width="720"></a>
 
-▶ [Watch it with sound](https://github.com/SrinjoyDutta1/ttyl/blob/main/docs/demo.mp4) (21s)
+▶ [Watch it with sound](https://srinjoydutta1.github.io/ttyl/) (21s)
 
 You start Claude Code in one terminal, Codex in another, a third to fix a flaky test, a
 fourth for a quick question... and an hour later you have a wall of tabs and no idea which
