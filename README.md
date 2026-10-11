@@ -49,7 +49,7 @@ takes you to the right terminal.
 
 ## Install
 
-With Homebrew:
+With Homebrew (ready-made for macOS 26 on Apple silicon; on older Macs use the installer below, it's much faster):
 
 ```sh
 brew install srinjoydutta1/tap/ttyl
