@@ -56,6 +56,14 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
   Clicking a row closes the panel (`Panel.close()` clicks the status item; SwiftUI has no API for it);
   `ttyl-bar --demo --self-test-panel` opens/closes it programmatically and prints whether it worked.
 
+## Releasing
+Bump `__version__` (`src/ttyl/__init__.py`) and `CFBundleShortVersionString` (`gui/Info.plist`), push, wait
+for CI, then push a `vX.Y.Z` tag: `release.yml` publishes to PyPI and makes the GitHub Release. The Homebrew
+formula lives in SrinjoyDutta1/homebrew-tap (its daily `brew bump` opens the update PR). After an upgrade
+the old menu bar app keeps running until `ttyl app` rebuilds it, so never drop a snapshot key an older
+`Model.swift` requires (that's why `summaries.on` is still sent). `docs/` is also the GitHub Pages site
+(`index.html` plays `demo.mp4`); the demo video is composed from demo data, with the panel a real render.
+
 ## UI rule
 Glance, pick, go. Group by what the session needs from the user; urgent lanes get a second
 line saying exactly what; everything else stays one line. Don't add columns or stats to lanes.
