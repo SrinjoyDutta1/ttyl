@@ -13,7 +13,7 @@ SUPPORTED BY
  - Aider
  - Qwen Code (beta)
 
-<img src="docs/menubar.png" alt="the ttyl menu bar panel: sessions grouped by what they need, two of them ringing" width="520">
+<img src="https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/docs/menubar.png" alt="the ttyl menu bar panel: sessions grouped by what they need, two of them ringing" width="520">
 
 You start Claude Code in one terminal, Codex in another, a third to fix a flaky test, a
 fourth for a quick question... and an hour later you have a wall of tabs and no idea which
@@ -45,7 +45,13 @@ takes you to the right terminal.
 
 ## Install
 
-One line, on macOS or Linux:
+With Homebrew:
+
+```sh
+brew install srinjoydutta1/tap/ttyl
+```
+
+Or the one-line installer, on macOS or Linux (no Homebrew or Python needed):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/install.sh | bash
@@ -54,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/install.sh 
 Or, if you already use pipx or uv (needs Python 3.11+):
 
 ```sh
-pipx install git+https://github.com/SrinjoyDutta1/ttyl     # or: uv tool install git+…
+pipx install ttyl     # or: uv tool install ttyl
 ```
 
 Then pick how you want it. **Both work, at the same time too:**
@@ -88,7 +94,7 @@ icon to archive it, or right-click a row for Archive / Move to Trash / Copy resu
 
 **Terminal view:** `ttyl`
 
-![the terminal view: grouped lanes, a ringing session, its summary and timeline](docs/ttyl.png)
+![the terminal view: grouped lanes, a ringing session, its summary and timeline](https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/docs/ttyl.png)
 
 | key | does |
 |---|---|
@@ -121,7 +127,7 @@ the title.
 
 ## Reading the squares
 
-![a closed session: its saved summary, and ⏎ to reopen it where it left off](docs/ttyl-closed.png)
+![a closed session: its saved summary, and ⏎ to reopen it where it left off](https://raw.githubusercontent.com/SrinjoyDutta1/ttyl/main/docs/ttyl-closed.png)
 
 Each square is one turn: one message from you plus everything the agent did in response,
 oldest on the left.

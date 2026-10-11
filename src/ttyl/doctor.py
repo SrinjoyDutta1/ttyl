@@ -25,8 +25,10 @@ def _line(mark: str, label: str, detail: str = "", fix: str = "") -> None:
 
 
 def install_method() -> str:
-    """'uv', 'pipx', 'checkout' (editable dev install) or 'pip'."""
+    """'brew', 'uv', 'pipx', 'checkout' (editable dev install) or 'pip'."""
     exe = os.path.realpath(sys.executable)
+    if "/Cellar/ttyl/" in exe:
+        return "brew"
     if "/uv/tools/" in exe:
         return "uv"
     if "/pipx/venvs/" in exe:
@@ -114,6 +116,7 @@ def update() -> int:
     cmds = {
         "uv": ["uv", "tool", "install", "--force", "--reinstall", "ttyl"],
         "pipx": ["pipx", "upgrade", "ttyl"],
+        "brew": ["brew", "upgrade", "ttyl"],
     }
     if method == "checkout":
         print("You're running from a git checkout: `git pull` updates it (and `ttyl app` rebuilds the app).")
