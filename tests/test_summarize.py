@@ -122,7 +122,7 @@ def test_the_engine_follows_the_setting(monkeypatch):
     assert ("menu bar app" if os.uname().sysname == "Darwin" else "need a Mac") in snap["summaries"]["note"]
     engine.handle({"cmd": "summaries", "mode": "claude"})
     snap = engine.tick()
-    assert snap["summaries"] == {"mode": "claude", "using": "claude",
+    assert snap["summaries"] == {"mode": "claude", "using": "claude", "on": True,
                                  "note": snap["summaries"]["note"]} and "billed" in snap["summaries"]["note"]
     assert "go to Claude" in snap["notices"][0]
     engine.handle({"cmd": "summaries", "mode": "off"})

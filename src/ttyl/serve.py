@@ -155,9 +155,14 @@ class Engine:
 
     def _summaries_info(self) -> dict:
         if not self.allow_summaries:
-            return {"mode": OFF, "using": "", "note": "summaries are off in this mode"}
-        using = self.summarizer.kind if self.summarizer is not None and self.summarizer.enabled else ""
-        return {"mode": mode(), "using": using, "note": describe(self.summarizer)}
+            info = {"mode": OFF, "using": "", "note": "summaries are off in this mode"}
+        else:
+            using = self.summarizer.kind if self.summarizer is not None and self.summarizer.enabled else ""
+            info = {"mode": mode(), "using": using, "note": describe(self.summarizer)}
+        # A menu bar app from 0.3.0 can't read a snapshot without "on" (Claude summaries on), and it
+        # keeps running after an upgrade until `ttyl app` rebuilds it.
+        info["on"] = info["mode"] == CLAUDE
+        return info
 
     def _new_collisions(self) -> list[dict]:
         """Alert once per new collision (ones already happening when ttyl starts stay quiet)."""

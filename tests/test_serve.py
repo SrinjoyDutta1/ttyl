@@ -60,7 +60,8 @@ def test_json_matches_the_swift_model():
     store = DemoStore()
     snap = Engine(store, ring=False, summaries=False).tick()
     assert {_camel(k) for k in snap if k != "type"} == _swift_fields("Snapshot")
-    assert {_camel(k) for k in snap["summaries"]} == _swift_fields("SummariesInfo")
+    assert {_camel(k) for k in snap["summaries"]} - {"on"} == _swift_fields("SummariesInfo")
+    assert {"on", "note"} <= set(snap["summaries"])  # what a 0.3.0 menu bar app needs to read it
     assert {_camel(k) for k in snap["muted"]} == _swift_fields("MutedInfo")
     assert {_camel(k) for k in snap["sections"][0]} == _swift_fields("SectionInfo")
     assert {_camel(k) for k in snap["sessions"][0]} == _swift_fields("SessionInfo")
