@@ -87,15 +87,23 @@ def doctor() -> int:
             _line(OK if allowed else BAD, "notifications", "allowed" if allowed else "blocked",
                   "" if allowed else "System Settings > Notifications > ttyl: allow")
 
-    print("\nSummaries")
-    from .summarize import has_credentials, summaries_on
+    from .ring import mute_state
 
-    if summaries_on():
-        key = has_credentials()
-        _line(OK if key else BAD, "AI summaries", "on" + ("" if key else ", but no ANTHROPIC_API_KEY"),
-              "" if key else "export ANTHROPIC_API_KEY=sk-ant-... in ~/.zshrc")
-    else:
-        _line(OK, "AI summaries", "off (nothing is sent anywhere)", "optional: ttyl summaries on")
+    muted, until = mute_state()
+    if muted:
+        _line(WARN, "ring sound", f"muted {until}", "ttyl mute off")
+
+    print("\nSummaries")
+    from .summarize import CLAUDE, LOCAL, OFF, choose, describe, helper_path, mode
+
+    want, summarizer = mode(), choose(None, None)
+    working = summarizer is not None and summarizer.enabled
+    fix = ""
+    if want == CLAUDE and not (working and summarizer.kind == CLAUDE):
+        fix = "export ANTHROPIC_API_KEY=sk-ant-... in ~/.zshrc for Claude's summaries"
+    elif want == LOCAL and not working:
+        fix = "ttyl app" if helper_path() is None else "turn on Apple Intelligence, or: ttyl summaries claude"
+    _line(OK if working or want == OFF else WARN, "summaries", describe(summarizer), fix)
     return 0
 
 

@@ -11,7 +11,7 @@ OUT="${OUT:-$HOME/Library/Caches/ttyl/build}"
 ARCHS="${ARCHS:-$(uname -m)}"
 APP="$OUT/ttyl.app"
 TTYL="${TTYL:-$(command -v ttyl || true)}"  # baked in so the app finds the engine without your PATH
-HASH=$(cat Sources/*.swift Info.plist | shasum | cut -c1-12)  # `ttyl app` rebuilds when this changes
+HASH=$(cat Sources/*.swift Helpers/*.swift Info.plist | shasum | cut -c1-12)  # `ttyl app` rebuilds when this changes
 
 rm -rf "$APP" "$OUT/obj"
 mkdir -p "$APP/Contents/MacOS" "$OUT/obj"
@@ -20,6 +20,14 @@ for arch in $ARCHS; do
     Sources/*.swift -o "$OUT/obj/ttyl-bar-$arch"
 done
 lipo -create "$OUT"/obj/ttyl-bar-* -output "$APP/Contents/MacOS/ttyl-bar"
+# on-device summaries (Apple's model): Apple silicon and the macOS 26 SDK only, so skip it otherwise
+if [[ " $ARCHS " == *" arm64 "* ]] && xcrun swiftc -O -swift-version 5 -parse-as-library \
+    -target arm64-apple-macos26.0 Helpers/Summarize.swift -o "$APP/Contents/MacOS/ttyl-summarize" \
+    2>"$OUT/obj/summarize.log"; then
+  codesign --force --sign - "$APP/Contents/MacOS/ttyl-summarize" >/dev/null 2>&1
+else
+  echo "(no on-device summaries: needs Apple silicon and the macOS 26 SDK; see $OUT/obj/summarize.log)"
+fi
 sed -e "s|__TTYL__|$TTYL|" -e "s|__HASH__|$HASH|" Info.plist > "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP" >/dev/null 2>&1
 echo "built $APP ($ARCHS; engine: ${TTYL:-ttyl on PATH})"

@@ -112,7 +112,8 @@ final class Engine: ObservableObject {
     }
     func go(id: String) { send(["cmd": "go", "id": id]) }
     func testRing() { send(["cmd": "test_ring"]) }
-    func setSummaries(_ on: Bool) { send(["cmd": "summaries", "on": on]) }
+    func setSummaries(_ mode: String) { send(["cmd": "summaries", "mode": mode]) }  // local, claude, off
+    func mute(_ duration: String) { send(["cmd": "mute", "for": duration]) }  // 1h, morning, on, off
     func archive(_ s: SessionInfo, _ on: Bool) { send(["cmd": on ? "archive" : "unarchive", "id": s.id]) }
     func trash(_ s: SessionInfo) { send(["cmd": "delete", "id": s.id]) }
     func stopRinging(_ s: SessionInfo) { send(["cmd": "ack", "id": s.id]) }

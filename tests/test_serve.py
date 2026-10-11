@@ -61,6 +61,7 @@ def test_json_matches_the_swift_model():
     snap = Engine(store, ring=False, summaries=False).tick()
     assert {_camel(k) for k in snap if k != "type"} == _swift_fields("Snapshot")
     assert {_camel(k) for k in snap["summaries"]} == _swift_fields("SummariesInfo")
+    assert {_camel(k) for k in snap["muted"]} == _swift_fields("MutedInfo")
     assert {_camel(k) for k in snap["sections"][0]} == _swift_fields("SectionInfo")
     assert {_camel(k) for k in snap["sessions"][0]} == _swift_fields("SessionInfo")
     assert {_camel(k) for k in snap["sessions"][0]["turns"][0]} == _swift_fields("TurnInfo")
@@ -86,6 +87,19 @@ def test_the_mac_app_ships_inside_the_package_and_hashes_like_build_sh():
     from ttyl import macapp
 
     assert (macapp.GUI / "build.sh").exists() and len(list((macapp.GUI / "Sources").glob("*.swift"))) >= 4
-    shell = subprocess.run("cat Sources/*.swift Info.plist | shasum | cut -c1-12", shell=True,
+    shell = subprocess.run("cat Sources/*.swift Helpers/*.swift Info.plist | shasum | cut -c1-12", shell=True,
                            cwd=macapp.GUI, capture_output=True, text=True).stdout.strip()
     assert macapp.source_hash() == shell
+
+
+def test_mute_from_the_app():
+    engine = Engine(DemoStore(), ring=False, summaries=False)
+    assert engine.tick()["muted"] == {"on": False, "until": ""}
+    engine.handle({"cmd": "mute", "for": "1h"})
+    snap = engine.tick()
+    assert snap["muted"]["on"] and snap["muted"]["until"].startswith("until ")
+    assert snap["notices"][0].startswith("🔕 ring muted until")
+    engine.handle({"cmd": "mute", "for": "soon-ish"})
+    assert engine.tick()["notices"][0].startswith("couldn't mute")
+    engine.handle({"cmd": "mute", "for": "off"})
+    assert engine.tick()["muted"]["on"] is False

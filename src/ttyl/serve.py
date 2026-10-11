@@ -11,7 +11,8 @@ every few seconds regardless), and takes one JSON command per line on stdin:
     {"cmd": "test_ring"}                   ring once for the top session (checks sound + notifications)
     {"cmd": "archive", "id": ...}          hide it from the map ("unarchive" undoes)
     {"cmd": "delete", "id": ...}           move a closed session's transcript to the Trash
-    {"cmd": "summaries", "on": true}       turn AI summaries on or off (saved in settings)
+    {"cmd": "summaries", "mode": "local"}  who writes summaries: local (on this Mac), claude or off
+    {"cmd": "mute", "for": "1h"}           silence the ring: 30m, 1h, morning, on (until unmuted) or off
 
 A snapshot's "rings" lists sessions that started ringing since the last one, and
 "alerts" lists new collisions (two sessions editing the same file); the app posts
@@ -29,11 +30,11 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from . import collide, render, settings, terminal
+from . import collide, render, terminal
 from .model import Session, Status, one_line, plain
-from .ring import Ringer, _play, alert_sound, claim_noise, ring_event, state_dir
+from .ring import Ringer, _play, alert_sound, claim_noise, mute_state, ring_event, set_mute, state_dir
 from .store import Store
-from .summarize import Summarizer, has_credentials, load_key_from_shell, summaries_on
+from .summarize import CLAUDE, LOCAL, OFF, choose, describe, has_credentials, load_key_from_shell, mode, set_mode, summaries_on
 
 TURNS = 14
 HEARTBEAT = 10.0
@@ -147,18 +148,16 @@ class Engine:
         self._maybe_summarize()
         snap = snapshot(self.sessions, getattr(self.store, "show_all", False), self.notices, self.rings, alerts)
         snap["summaries"] = self._summaries_info()
+        on, until = mute_state()
+        snap["muted"] = {"on": on, "until": until}
         self.notices, self.rings = [], []
         return snap
 
     def _summaries_info(self) -> dict:
-        on = self.allow_summaries and summaries_on()
-        if not on:
-            note = "off: nothing is sent anywhere. Turn on to have Claude summarize each session"
-        elif self.summarizer is not None and not self.summarizer.enabled:
-            note = self.summarizer.disabled_reason
-        else:
-            note = ""
-        return {"on": on, "note": note}
+        if not self.allow_summaries:
+            return {"mode": OFF, "using": "", "note": "summaries are off in this mode"}
+        using = self.summarizer.kind if self.summarizer is not None and self.summarizer.enabled else ""
+        return {"mode": mode(), "using": using, "note": describe(self.summarizer)}
 
     def _new_collisions(self) -> list[dict]:
         """Alert once per new collision (ones already happening when ttyl starts stay quiet)."""
@@ -201,10 +200,18 @@ class Engine:
                 self.notices.append(msg if ok else f"couldn't delete: {msg}")
                 log(f"delete {s.project}: {msg}")
         elif name == "summaries":
-            on = bool(cmd.get("on"))
-            settings.set("summaries", on)
-            self.notices.append("AI summaries on: excerpts of your sessions go to Claude, billed to your "
-                                "ANTHROPIC_API_KEY" if on else "AI summaries off: nothing is sent anywhere")
+            want = cmd.get("mode") or (CLAUDE if cmd.get("on") else LOCAL)
+            if want in (CLAUDE, LOCAL, OFF):
+                set_mode(want)
+                self.notices.append({CLAUDE: "Summaries by Claude: short excerpts of your sessions go to Claude, "
+                                             "billed to your ANTHROPIC_API_KEY",
+                                     LOCAL: "Summaries on this Mac: Apple Intelligence writes them, nothing leaves it",
+                                     OFF: "Summaries off: the recap shows each agent's own notes"}[want])
+        elif name == "mute":
+            try:
+                self.notices.append(set_mute(str(cmd.get("for", "on"))))
+            except ValueError as e:
+                self.notices.append(f"couldn't mute: {e}")
         elif name == "open_terminal_view":
             terminal.run_in_new_window("ttyl")
         elif name == "test_ring":
@@ -236,15 +243,15 @@ class Engine:
         return f"{s.project} runs in {render.where(s) or 'no terminal'}, nothing to go to"
 
     def _maybe_summarize(self) -> None:
-        if not (self.allow_summaries and summaries_on()):
-            self.summarizer = None  # (turned off since): stop
+        if not self.allow_summaries:
+            self.summarizer = None
             return
-        if self.summarizer is None:
-            if not self._key_checked and not has_credentials() and not sys.stdin.isatty():
-                load_key_from_shell()  # the menu bar app doesn't inherit your shell's environment
+        if summaries_on() and not self._key_checked and not has_credentials() and not sys.stdin.isatty():
+            load_key_from_shell()  # the menu bar app doesn't inherit your shell's environment
             self._key_checked = True
-            self.summarizer = Summarizer(getattr(self.store, "state", None))
-        if self._summarizing:
+        if not self._summarizing:  # never swap it out from under a summary being written
+            self.summarizer = choose(self.summarizer, getattr(self.store, "state", None))
+        if self.summarizer is None or self._summarizing:
             return
         cutoff = datetime.now(timezone.utc) - timedelta(days=getattr(self.store, "days", 3))
         s = self.summarizer.pick(render.ordered(self.sessions), None, cutoff)

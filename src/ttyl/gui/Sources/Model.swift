@@ -13,6 +13,7 @@ struct Snapshot: Decodable {
     let alerts: [AlertEvent]  // new collisions since the last snapshot
     let collisions: Int  // files being edited by two sessions at once
     let summaries: SummariesInfo
+    let muted: MutedInfo
 
     func members(of section: SectionInfo) -> [SessionInfo] {
         sessions.filter { $0.section == section.key }
@@ -28,8 +29,15 @@ struct RingEvent: Decodable {
 }
 
 struct SummariesInfo: Decodable {
-    let on: Bool
+    let mode: String  // local (on this Mac) | claude | off
+    let using: String  // which one is writing them right now: local | claude | "" (neither works)
     let note: String
+}
+
+/// The ring sound is off (rings still show and notify).
+struct MutedInfo: Decodable {
+    let on: Bool
+    let until: String  // "until 8:00am", "until you unmute"
 }
 
 struct AlertEvent: Decodable {

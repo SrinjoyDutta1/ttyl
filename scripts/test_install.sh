@@ -20,6 +20,8 @@ TTYL="$TMP/home/.local/bin/ttyl"
 echo "== the installed command"
 run "$TTYL" ls --demo | head -4
 run "$TTYL" summaries
+echo "== the package ships the on-device summary helper's source"
+ls "$TMP"/home/.local/share/uv/tools/ttyl/lib/python*/site-packages/ttyl/gui/Helpers/Summarize.swift
 echo "== the menu bar app builds from the installed package"
 run "$TTYL" app --build-only
 echo "== ok (everything is in $TMP)"

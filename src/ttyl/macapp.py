@@ -18,6 +18,7 @@ from pathlib import Path
 
 GUI = Path(__file__).resolve().parent / "gui"
 INSTALLED = Path.home() / "Applications" / "ttyl.app"
+BUILT = Path.home() / "Library" / "Caches" / "ttyl" / "build" / "ttyl.app"  # build.sh's default OUT
 
 
 def app_log() -> Path:
@@ -27,9 +28,9 @@ def app_log() -> Path:
 
 
 def source_hash() -> str:
-    """Same as build.sh: sha1 of the Swift sources then Info.plist, first 12 hex digits."""
+    """Same as build.sh: sha1 of the Swift sources, the helpers, then Info.plist, first 12 hex digits."""
     h = hashlib.sha1()
-    for f in sorted((GUI / "Sources").glob("*.swift")) + [GUI / "Info.plist"]:
+    for f in sorted((GUI / "Sources").glob("*.swift")) + sorted((GUI / "Helpers").glob("*.swift")) + [GUI / "Info.plist"]:
         h.update(f.read_bytes())
     return h.hexdigest()[:12]
 

@@ -1,7 +1,9 @@
 """User settings, in ~/.config/ttyl/settings.json (separate from the busy state.json,
 so the CLI, the terminal view and the menu bar engine can all change them safely).
 
-    summaries: bool   send session excerpts to Claude to write summaries (default off)
+    summaries: bool        send session excerpts to Claude to write summaries (default off)
+    local_summaries: bool  write summaries on this Mac with Apple's on-device model (default on)
+    muted_until: str       ISO time the ring sound comes back, or "forever" (unset: not muted)
 """
 
 from __future__ import annotations

@@ -8,8 +8,9 @@
   ttyl show <which>    one session: recap + turn timeline
   ttyl jump <which>    focus the terminal tab that session runs in
   ttyl resume <which>  reopen a closed session in a new terminal window
-  ttyl summaries on|off  let Claude summarize your sessions (off by default)
+  ttyl summaries local|claude|off  who summarizes sessions: this Mac (default), Claude, nobody
   ttyl summarize [which]  write (or refresh) AI summaries now
+  ttyl mute [30m|1h|morning|on|off]  silence the ring (rings still show)
   ttyl archive <which>   hide a session (new activity brings it back); unarchive undoes
   ttyl delete <which>    move a closed session's transcript to the Trash
   ttyl serve          JSON engine for the menu bar app (see gui/)
@@ -69,8 +70,10 @@ def main(argv: list[str] | None = None) -> int:
         cmd.add_argument("which")
         if name == "delete":
             cmd.add_argument("-y", "--yes", action="store_true", help="don't ask")
-    toggle = sub.add_parser("summaries", help="turn AI summaries on or off (off by default)")
-    toggle.add_argument("state", nargs="?", choices=["on", "off"])
+    toggle = sub.add_parser("summaries", help="who writes summaries: local (on this Mac, the default), claude or off")
+    toggle.add_argument("state", nargs="?", choices=["local", "claude", "on", "off"], help="on means claude")
+    mute = sub.add_parser("mute", help="silence the ring sound (rings still show and notify)")
+    mute.add_argument("duration", nargs="?", help="30m, 1h, morning, on (until you unmute) or off")
     summ = sub.add_parser("summarize", parents=[common], help="write AI summaries now (one session, or all that need one)")
     summ.add_argument("which", nargs="?")
     sub.add_parser("doctor", help="check that everything's set up, and how to fix what isn't")
@@ -92,6 +95,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "summaries":
         return _summaries(args.state)
+
+    if args.cmd == "mute":
+        return _mute(args.duration)
 
     if args.cmd == "app":
         from .macapp import main as app_main
@@ -170,37 +176,60 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _summaries(state: str | None) -> int:
-    from . import settings
-    from .summarize import MODEL, has_credentials, load_key_from_shell, summaries_on
+    from .summarize import CLAUDE, LOCAL, MODEL, OFF, choose, describe, has_credentials, load_key_from_shell, \
+        mode, set_mode
 
+    if state is not None:
+        set_mode({"on": CLAUDE}.get(state, state))
+    now = mode()
+    if now == CLAUDE and not has_credentials():
+        load_key_from_shell()
+    print(f"Summaries: {describe(choose(None, None))}.")
     if state is None:
-        print(f"AI summaries are {'on' if summaries_on() else 'off'}."
-              + ("" if summaries_on() else " Turn them on with: ttyl summaries on"))
+        print("Change with: ttyl summaries local (on this Mac) | claude (better, sends excerpts) | off")
+    elif now == CLAUDE:
+        print(f"Claude ({MODEL}) gets a short excerpt of each session (your prompts, the agent's replies,\n"
+              "file names, commit subjects), billed to your Anthropic API key: roughly 2 cents a summary,\n"
+              "only when a session has new turns. Back to on-device: ttyl summaries local")
+        if not has_credentials():
+            print("\nNo ANTHROPIC_API_KEY found yet. Get one at https://console.anthropic.com, then add\n"
+                  "  export ANTHROPIC_API_KEY=sk-ant-...\nto ~/.zshrc. Until then they're written on this Mac.")
+    elif now == LOCAL:
+        print("Apple's on-device model writes them: free, and nothing leaves your Mac.")
+    elif now == OFF:
+        print("Nothing summarizes your sessions; the recap shows each agent's own notes.")
+    return 0
+
+
+def _mute(duration: str | None) -> int:
+    from .ring import mute_state, set_mute
+
+    if duration is None:
+        on, until = mute_state()
+        print(f"The ring is muted {until}. Unmute: ttyl mute off" if on
+              else "The ring is on. Mute it with: ttyl mute 1h (or 30m, morning, on)")
         return 0
-    settings.set("summaries", state == "on")
-    if state == "off":
-        print("AI summaries off. Nothing is sent anywhere.")
-        return 0
-    print(f"AI summaries on. ttyl will send Claude ({MODEL}) a short excerpt of each session\n"
-          "(your prompts, the agent's replies, file names, commit subjects) to write its summary,\n"
-          "billed to your Anthropic API key: roughly 2 cents per summary, only when a session has\n"
-          "new turns. Turn off anytime with: ttyl summaries off")
-    if not has_credentials() and not load_key_from_shell():
-        print("\nNo ANTHROPIC_API_KEY found yet. Get one at https://console.anthropic.com, then add\n"
-              "  export ANTHROPIC_API_KEY=sk-ant-...\nto ~/.zshrc. Summaries start as soon as it's there.")
+    try:
+        print(set_mute(duration))
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 2
     return 0
 
 
 def _summarize(console: Console, sessions, args) -> int:
     from datetime import datetime, timedelta, timezone
 
-    from .summarize import Summarizer
+    from .summarize import choose, describe
 
     if args.demo or args.no_summaries:
         console.print("summaries are off in this mode")
         return 1
     store_state = State()
-    summarizer = Summarizer(store_state)
+    summarizer = choose(None, store_state)
+    if summarizer is None:
+        console.print(f"[red]no summaries:[/] {describe(None)}")
+        return 1
     if args.which:
         s = find(sessions, args.which)
         if s is None:
@@ -219,9 +248,8 @@ def _summarize(console: Console, sessions, args) -> int:
         text = summarizer.summarize(s)
         if not summarizer.enabled:
             console.print(f"[red]summaries are off:[/] {summarizer.disabled_reason}")
-            console.print("Set ANTHROPIC_API_KEY (from console.anthropic.com), then run this again.")
             return 1
-        console.print(f"  {text}" if text else "  [grey50](skipped: rate limited or declined; try again later)[/]")
+        console.print(f"  {text}" if text else "  [grey50](skipped: rate limited, too long or declined; try again later)[/]")
     return 0
 
 

@@ -16,9 +16,9 @@ from textual.widgets.option_list import Option
 
 from . import render, terminal
 from .model import Session, Status
-from .ring import Ringer, alert_sound
+from .ring import Ringer, alert_sound, mute_state, set_mute
 from .store import Store, default_store
-from .summarize import Summarizer, summaries_on
+from .summarize import OFF, Summarizer, choose, describe, mode
 
 REOPEN_GRACE = 45.0  # seconds a reopened session gets to show up before ⏎ may reopen it again
 
@@ -57,6 +57,7 @@ class TtylApp(App):
         *[Binding(str(n), f"go({n})", show=False) for n in range(2, 10)],
         Binding("o", "reopen", "reopen", show=False),
         Binding("a", "toggle_all", "show all"),
+        Binding("m", "toggle_mute", "mute"),
         Binding("x", "archive", "archive"),
         Binding("D", "delete", "delete", show=False),
         Binding("r", "refresh", "refresh", show=False),
@@ -126,11 +127,9 @@ class TtylApp(App):
     # -- summaries ------------------------------------------------------------
 
     def _summarize_next(self) -> None:
-        if not self._fixed_summarizer:  # follow `ttyl summaries on|off`, even while running
-            if self._allow_summaries and summaries_on():
-                self.summarizer = self.summarizer or Summarizer(getattr(self.store, "state", None))
-            else:
-                self.summarizer = None
+        if not self._fixed_summarizer and not self._summarizing:  # follow `ttyl summaries`, even while running
+            self.summarizer = choose(self.summarizer, getattr(self.store, "state", None)) \
+                if self._allow_summaries else None
         if self.summarizer is None or self._summarizing:
             return
         cutoff = datetime.now(timezone.utc) - timedelta(days=self.store.days)
@@ -152,12 +151,12 @@ class TtylApp(App):
         self._summarize_next()
 
     def _summary_hint(self) -> str:
-        if getattr(self.store, "demo", False):
+        if getattr(self.store, "demo", False) or self._fixed_summarizer:
             return ""
-        if self.summarizer is None:
-            return "AI summaries are off (nothing is sent anywhere). Turn on: ttyl summaries on"
-        if not self.summarizer.enabled:
-            return f"AI summaries are on but paused: {self.summarizer.disabled_reason}"
+        if mode() == OFF:
+            return "Summaries are off. On this Mac (free, private): ttyl summaries local"
+        if self.summarizer is None or not self.summarizer.enabled:
+            return f"Summaries: {describe(self.summarizer)}"
         return ""
 
     def _announce(self, sessions: list[Session]) -> None:
@@ -211,6 +210,9 @@ class TtylApp(App):
         bar = render.header(self.sessions)
         if self.store.show_all:
             bar.append("   all history", "grey42")
+        muted, until = mute_state()
+        if muted:
+            bar.append(f"   🔕 muted {until}", "grey62")
         if self.size.width >= 150:
             bar.append("      squares = turns, newest on the right:  ", "grey42")
             bar.append_text(render.LEGEND)
@@ -368,6 +370,11 @@ class TtylApp(App):
     def action_toggle_all(self) -> None:
         self.store.show_all = not self.store.show_all
         self.action_refresh()
+
+    def action_toggle_mute(self) -> None:
+        """m: mute until you press it again (`ttyl mute 1h` etc. for a set time)."""
+        self.notify(set_mute("off" if mute_state()[0] else "on"))
+        self._draw()
 
 
 def run(store: Store | None = None, summaries: bool = True, ring: bool = True) -> None:

@@ -26,22 +26,28 @@ To see the TUI without a terminal, `scripts/screenshot.py` renders it on demo da
 - `state.py`: `~/.local/state/ttyl/state.json`, sessions seen alive (cwd, launch flags,
   last_live) and saved summaries. Keeps closed terminals on the map and reopenable.
 - `settings.py`: ~/.config/ttyl/settings.json (kept apart from state.json so the CLI, TUI and menu bar
-  engine can all change it). `summaries` is OFF by default: nothing leaves the machine until the user
-  runs `ttyl summaries on` or flips it in the app; the TUI and engine re-check it every refresh.
-- `summarize.py`: model-written summaries via the `anthropic` SDK (`claude-opus-5-5`, effort low,
-  `fallbacks="default"`). Off without credentials; never runs mid-turn; one at a time.
-  Tests use a fake client; never hit the API from tests.
+  engine can all change it). Summary mode (`ttyl summaries local|claude|off`): `local_summaries`
+  (default on, Apple's on-device model, nothing leaves the Mac) and `summaries` (Claude, OFF by
+  default: nothing is sent until the user chooses it). The TUI and engine re-check them every refresh.
+- `summarize.py`: model-written summaries, never mid-turn, one at a time; `choose()` picks the writer.
+  Claude via the `anthropic` SDK (`claude-opus-5-5`, effort low, `fallbacks="default"`), or Apple's
+  on-device model via `gui/Helpers/Summarize.swift` (`ttyl-summarize`, built into the app bundle; 4096-token
+  context, so the digest shrinks to fit; it writes only purpose + what's done, since a small model got
+  "where it stands" wrong). Claude without a working key falls back to on-device. Tests use a fake client
+  and a fake helper (conftest sets `TTYL_SUMMARIZE_HELPER=""`); never hit the API or the real model.
 - `ring.py`: which sessions ring (blocked on you, or just finished) until acked; plays a
   generated double-ring WAV. Notifications are posted natively by the menu bar app from the
   snapshot's `rings` (never via osascript: macOS attributes those to Script Editor and clicking
   one opens it). Only the lock holder (`ringer.pid`,
-  the menu bar engine when running) makes noise. Tests must use `Ringer(sound=False, notify=False)`.
+  the menu bar engine when running) makes noise. `muted_until` in settings (`ttyl mute`, the app's 🔔)
+  silences the sound only. Tests must use `Ringer(sound=False)`.
 - `collide.py`: collision warnings, sessions (any agent, one still open) that edited the same absolute
   path within 60 min. `Session.collisions` feeds the lanes, recap, JSON and one-time alerts.
 - `serve.py`: `ttyl serve`, JSON snapshot lines out, JSON commands in; the menu bar app's engine.
   `tests/test_serve.py` checks the JSON keys against `src/ttyl/gui/Sources/Model.swift`; change both together.
 - `gui/` (inside the package, `src/ttyl/gui`, so pipx installs ship it): SwiftUI menu bar app,
-  built by `ttyl app` / `gui/build.sh` into ~/Library/Caches/ttyl/build with plain swiftc (SourceKit errors in
+  built by `ttyl app` / `gui/build.sh` into ~/Library/Caches/ttyl/build with plain swiftc, plus the
+  `ttyl-summarize` helper from `gui/Helpers` (arm64, macOS 26 SDK; skipped otherwise) (SourceKit errors in
   single files are noise; the build compiles them together). It runs the engine directly, not via
   a shell: an interactive login shell hung when launched from the app.
   `ttyl-bar --snapshot out.png` renders the panel on demo data (menus can't be snapshotted);

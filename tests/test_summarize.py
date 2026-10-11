@@ -102,8 +102,11 @@ def test_summaries_are_off_until_you_turn_them_on(monkeypatch):
     assert not summaries_on()
 
 
-def test_the_engine_follows_the_setting():
+def test_the_engine_follows_the_setting(monkeypatch):
+    from ttyl import summarize
     from ttyl.serve import Engine
+
+    monkeypatch.setattr(summarize, "has_credentials", lambda: True)
 
     class Store:
         show_all = False
@@ -114,10 +117,119 @@ def test_the_engine_follows_the_setting():
 
     engine = Engine(Store(), ring=False)
     snap = engine.tick()
-    assert snap["summaries"]["on"] is False and engine.summarizer is None
-    engine.handle({"cmd": "summaries", "on": True})
+    assert snap["summaries"]["mode"] == "local" and snap["summaries"]["using"] == ""  # no helper in tests
+    assert "menu bar app" in snap["summaries"]["note"]
+    engine.handle({"cmd": "summaries", "mode": "claude"})
     snap = engine.tick()
-    assert snap["summaries"]["on"] is True and engine.summarizer is not None
+    assert snap["summaries"] == {"mode": "claude", "using": "claude",
+                                 "note": snap["summaries"]["note"]} and "billed" in snap["summaries"]["note"]
     assert "go to Claude" in snap["notices"][0]
-    engine.handle({"cmd": "summaries", "on": False})
-    assert engine.tick()["summaries"]["on"] is False and engine.summarizer is None
+    engine.handle({"cmd": "summaries", "mode": "off"})
+    snap = engine.tick()
+    assert snap["summaries"]["mode"] == "off" and engine.summarizer is None
+
+
+FAKE_HELPER = """#!{python}
+import json, sys
+if "--check" in sys.argv:
+    print(json.dumps({check!r}))
+    sys.exit()
+req = json.load(sys.stdin)
+with open({log!r}, "a") as fh:
+    fh.write(json.dumps(req) + "\\n")
+print(json.dumps({{"error": "too long", "kind": "context"}} if len(req["prompt"]) > {limit} else {{"text": {reply!r}}}))
+"""
+
+
+def fake_helper(tmp_path, monkeypatch, reply="You're doing X. It did X.", available=True, limit=10**9):
+    import sys
+
+    log = tmp_path / "requests.jsonl"
+    check = {"available": True} if available else {"available": False, "reason": "Apple Intelligence is off"}
+    path = tmp_path / "ttyl-summarize"
+    path.write_text(FAKE_HELPER.format(python=sys.executable, check=check, log=str(log),
+                                       limit=limit, reply=reply))
+    path.chmod(0o755)
+    monkeypatch.setenv("TTYL_SUMMARIZE_HELPER", str(path))
+    return log
+
+
+def test_summaries_default_to_this_mac_and_off_means_off(monkeypatch):
+    from ttyl.summarize import mode, set_mode
+
+    assert mode() == "local"  # nothing leaves the Mac, so it's on out of the box
+    set_mode("claude")
+    assert mode() == "claude"
+    set_mode("off")
+    assert mode() == "off"
+    set_mode("local")
+    monkeypatch.setenv("TTYL_SUMMARIES", "0")
+    assert mode() == "off"
+
+
+def test_on_device_summary(tmp_path, monkeypatch):
+    import json
+
+    from ttyl.summarize import ON_DEVICE, choose
+
+    log = fake_helper(tmp_path, monkeypatch, reply="Here's a summary:\n- You're fixing **X**.\n- It found Y.")
+    state = State(tmp_path / "state.json")
+    sm = choose(None, state)
+    assert sm is not None and sm.kind == "local" and sm.model == ON_DEVICE
+    s = session(Claude().prompt("fix X").say("found Y"), status=Status.WAITING, waiting_for="permission prompt")
+    assert sm.summarize(s) == "You're fixing X. It found Y."  # opener, bullets and markdown gone
+    assert state.get("s1")["summary"]["model"] == ON_DEVICE
+    (req,) = [json.loads(line) for line in log.read_text().splitlines()]
+    assert "Developer: fix X" in req["prompt"] and "Status:" not in req["prompt"]  # ttyl says where it stands
+    assert "two plain sentences" in req["instructions"]
+    assert choose(sm, state) is sm  # reused while it works
+
+
+def test_on_device_shrinks_a_long_log_to_fit(tmp_path, monkeypatch):
+    import json
+
+    from ttyl.summarize import choose
+
+    log = fake_helper(tmp_path, monkeypatch, limit=400)
+    b = Claude()
+    for i in range(10):
+        b = b.prompt(f"step {i}: " + "do the thing " * 5).say("done " * 10)
+    sm = choose(None, None)
+    assert sm.summarize(session(b)) == "You're doing X. It did X."
+    sizes = [len(json.loads(line)["prompt"]) for line in log.read_text().splitlines()]
+    assert sizes[-1] <= 400 < sizes[0]  # retried with fewer turns until it fit
+
+
+def test_claude_without_a_key_falls_back_to_this_mac(tmp_path, monkeypatch):
+    from ttyl import summarize
+    from ttyl.summarize import choose, describe, set_mode
+
+    fake_helper(tmp_path, monkeypatch)
+    monkeypatch.setattr(summarize, "has_credentials", lambda: False)
+    set_mode("claude")
+    sm = choose(None, None)
+    assert sm.kind == "local"
+    assert describe(sm) == "Claude: no ANTHROPIC_API_KEY, so they're written on this Mac for now"
+    monkeypatch.setattr(summarize, "has_credentials", lambda: True)
+    assert choose(sm, None).kind == "claude"  # a key turned up
+
+
+def test_rejected_key_pauses_claude_instead_of_retrying_every_refresh(tmp_path, monkeypatch):
+    from ttyl import summarize
+    from ttyl.summarize import Summarizer, choose, set_mode
+
+    fake_helper(tmp_path, monkeypatch)
+    monkeypatch.setattr(summarize, "has_credentials", lambda: True)
+    set_mode("claude")
+    claude = Summarizer(None, client=client(FakeMessages(error=TypeError("Could not resolve authentication"))))
+    assert claude.summarize(session(Claude().prompt("x").say("y"))) is None
+    assert choose(claude, None).kind == "local"
+    assert choose(choose(claude, None), None).kind == "local"  # and it stays there
+
+
+def test_no_apple_intelligence_means_no_summarizer_and_says_why(tmp_path, monkeypatch):
+    from ttyl.summarize import choose, describe
+
+    fake_helper(tmp_path, monkeypatch, available=False)
+    assert choose(None, None) is None
+    assert describe(None) == "Apple Intelligence is off"

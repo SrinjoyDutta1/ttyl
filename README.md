@@ -25,7 +25,8 @@ finishes, your menu bar says **☎ ring ring**, your Mac rings like an old phone
 takes you to the right terminal.
 
 - **Ring ring.** A session rings when it's blocked on you (a permission prompt, a question)
-  or finishes its turn. It stops once you go to it.
+  or finishes its turn. It stops once you go to it. Click the 🔔 to mute the sound for an hour,
+  until morning, or until you unmute; rings still show, just silently.
 - **Collision warnings.** "⚠ `src/limits.py` is also being edited by codex (ttys008)": when two
   sessions, from any agents, edit the same file within the hour, both get flagged and you get a
   notification. No single agent can see this; ttyl sees all of them.
@@ -34,8 +35,8 @@ takes you to the right terminal.
   ("approve `git push -u origin feat/rate-limits`").
 - **A square per turn**, like a commit graph for the conversation: edits, commits, failures,
   chat. Hover a square to see that turn.
-- **A summary of every session** (opt-in), written by Claude and saved: the goal, what's done,
-  and what it's waiting on.
+- **A summary of every session**, written on your Mac by Apple Intelligence (free, private), or
+  by Claude if you opt in: the goal and what's done so far.
 - **Go there:** click a row (or press `1`–`9` in the terminal view) and the right
   Terminal / iTerm2 tab comes to the front.
 - **Closed a tab by accident?** It stays on the map. Click it and it reopens in a new window,
@@ -70,11 +71,12 @@ app, notifications) and says how to fix what's missing. `ttyl update` upgrades i
 `ttyl app` compiles the app locally with Apple's Command Line Tools
 (`xcode-select --install` if you don't have them); no Xcode project, nothing downloaded.
 
-**AI summaries are off by default**, so nothing leaves your machine. To turn them on:
+**Summaries are written on your Mac** by Apple's on-device model (macOS 26 on Apple silicon,
+with Apple Intelligence on), so nothing leaves it. For better ones, let Claude write them:
 
 ```sh
 export ANTHROPIC_API_KEY=sk-ant-...   # from console.anthropic.com, in ~/.zshrc
-ttyl summaries on                     # or: menu bar ☎ > ⋯ > AI summaries
+ttyl summaries claude                 # or: menu bar ☎ > ⋯ > Summaries
 ```
 
 ## Use
@@ -82,7 +84,7 @@ ttyl summaries on                     # or: menu bar ☎ > ⋯ > AI summaries
 **Menu bar:** click ☎ for the panel (turn on **⋯ → Open at login** so it's there after a restart). Click a row to go to that terminal (or reopen it),
 hover a row for its summary, hover a square for that turn. Hover a row and click the box
 icon to archive it, or right-click a row for Archive / Move to Trash / Copy resume command.
-`⋯` opens the full terminal view, shows all history, or plays a test ring.
+`⋯` opens the full terminal view, shows all history, or plays a test ring. 🔔 mutes the ring.
 
 **Terminal view:** `ttyl`
 
@@ -105,11 +107,12 @@ ttyl show 5          # summary + full timeline for the session on ttys005
 ttyl jump api        # bring the tab for project "api…" to the front
 ttyl resume 3f2a9c   # reopen a closed session (by id prefix) in a new window
 ttyl doctor          # check the setup; ttyl update to upgrade
-ttyl summaries on    # opt in to AI summaries (off by default; `off` to stop)
+ttyl summaries claude  # who writes summaries: local (this Mac, default), claude or off
 ttyl summarize       # write or refresh summaries now
 ttyl archive 5       # hide a session until it does something new (unarchive undoes)
 ttyl delete 3f2a9c   # move a closed session's transcript to the Trash
 ttyl -a              # include all history, not just the last 3 days + everything open
+ttyl mute 1h         # silence the ring (30m, 1h, morning, on, off); `m` in the terminal view
 ttyl --quiet         # no ring sound or notifications (rows still flash)
 ```
 
@@ -160,14 +163,20 @@ snapshots and takes commands on stdin. The same engine drives the terminal view.
 
 By default everything stays on your machine: ttyl only reads files and talks to your terminal.
 
-AI summaries are the one exception, and they're **off until you turn them on** (`ttyl summaries
-on`, or the toggle in the menu bar app). When on, ttyl sends Claude (`claude-opus-5-5`, low
-effort) a compact excerpt of a session (your prompts, the agent's replies, file names, commit
-subjects) to write its summary, billed to your Anthropic API key (roughly 2¢ a summary). It does
-this only after a session has new turns and isn't mid-turn, one session at a time, for every
-agent's sessions, not just Claude's. `ttyl summaries off` stops it; `TTYL_SUMMARIES=0` or
-`--no-summaries` force it off. With summaries off you see the agent's own "while you were away"
-note where it wrote one.
+Summaries stay on your machine too: Apple's on-device model writes them, through a small
+helper (`ttyl-summarize`) built alongside the menu bar app. It needs macOS 26 on Apple silicon
+with Apple Intelligence on; without it, the recap shows the agent's own "while you were away"
+note where it wrote one. On-device summaries say what a session is for and what's done; the
+lane already says exactly where it stands.
+
+Claude summaries are the one exception, and they're **off until you choose them** (`ttyl
+summaries claude`, or ⋯ → Summaries in the menu bar app). Then ttyl sends Claude
+(`claude-opus-5-5`, low effort) a compact excerpt of a session (your prompts, the agent's
+replies, file names, commit subjects) to write its summary, billed to your Anthropic API key
+(roughly 2¢ a summary). Without a key, or if it's rejected, summaries are written on your Mac
+instead. Either way a summary is written only after a session has new turns and isn't
+mid-turn, one session at a time, for every agent's sessions, not just Claude's. `ttyl summaries
+off` stops all of it; `TTYL_SUMMARIES=0` or `--no-summaries` force it off.
 
 ### Support
 

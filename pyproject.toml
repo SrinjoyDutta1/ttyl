@@ -36,7 +36,7 @@ where = ["src"]
 version = {attr = "ttyl.__version__"}
 
 [tool.setuptools.package-data]
-ttyl = ["gui/Info.plist", "gui/build.sh", "gui/Sources/*.swift"]
+ttyl = ["gui/Info.plist", "gui/build.sh", "gui/Sources/*.swift", "gui/Helpers/*.swift"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

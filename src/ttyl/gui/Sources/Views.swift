@@ -49,6 +49,8 @@ struct MenuLabel: View {
             Text(engine.phase ? "☎ ring ring" : "☏ ring ring")
         } else if needs > 0 {
             Text("☎ \(needs)")
+        } else if engine.snap?.muted.on == true {
+            Image(systemName: "bell.slash")
         } else {
             Image(systemName: "phone")
         }
@@ -75,7 +77,7 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Header()
+            Header(interactive: scrolls)
             if let n = engine.notice {
                 Text(n)
                     .font(.system(size: 12, weight: .medium))
@@ -114,6 +116,7 @@ struct PanelView: View {
 
 struct Header: View {
     @EnvironmentObject var engine: Engine
+    var interactive = true  // menus can't be drawn into snapshots
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -129,6 +132,13 @@ struct Header: View {
                     }
                 }
                 Spacer()
+                if let muted = engine.snap?.muted {
+                    if muted.on {
+                        Text("muted \(muted.until)").font(.system(size: 11)).foregroundStyle(.secondary)
+                            .lineLimit(1).fixedSize()
+                    }
+                    MuteButton(muted: muted, interactive: interactive)
+                }
             }
             if let snap = engine.snap {
                 HStack(spacing: 12) {
@@ -152,6 +162,34 @@ struct Header: View {
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(Capsule().fill(color))
             .foregroundStyle(.white)
+    }
+}
+
+/// The bell in the header: mute the ring for a while. Rings still show and notify, silently.
+struct MuteButton: View {
+    @EnvironmentObject var engine: Engine
+    let muted: MutedInfo
+    var interactive = true
+
+    var body: some View {
+        let icon = Image(systemName: muted.on ? "bell.slash" : "bell")
+        if !interactive {
+            icon.foregroundStyle(.secondary)
+        } else {
+            Menu {
+                if muted.on {
+                    Button("Unmute") { engine.mute("off") }
+                    Divider()
+                }
+                Button("Mute for 1 hour") { engine.mute("1h") }
+                Button("Mute until tomorrow morning") { engine.mute("morning") }
+                Button("Mute until I unmute") { engine.mute("on") }
+            } label: {
+                icon
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help(muted.on ? "The ring is muted \(muted.until)" : "Mute the ring")
+        }
     }
 }
 
@@ -443,8 +481,15 @@ struct Footer: View {
                     get: { engine.snap?.showAll ?? false }, set: { engine.setShowAll($0) }))
                 Toggle("Open at login", isOn: Binding(
                     get: { LoginItem.isOn }, set: { engine.flashNotice(LoginItem.set($0)) }))
-                Toggle("AI summaries (sends excerpts to Claude)", isOn: Binding(
-                    get: { engine.snap?.summaries.on ?? false }, set: { engine.setSummaries($0) }))
+                Picker("Summaries", selection: Binding(
+                    get: { engine.snap?.summaries.mode ?? "off" }, set: { engine.setSummaries($0) })) {
+                    Text("On this Mac (free, private)").tag("local")
+                    Text("By Claude (better; sends excerpts, uses your API key)").tag("claude")
+                    Text("Off").tag("off")
+                }
+                if let note = engine.snap?.summaries.note, !note.isEmpty {
+                    Text(note)
+                }
                 Divider()
                 Button("Quit ttyl") { engine.quit() }
             } label: {
